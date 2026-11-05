@@ -45,11 +45,19 @@ const note = atom({ plugin: 'cache-nudge', key: 'note' } as const, '')
 let settings: Settings = settingsFrom({})
 let remindTimer: Timer | undefined
 let pingTimer: Timer | undefined
+// Bumped by every armPing: a call overtaken by a later one drops its timer instead of orphaning it.
+let pingGeneration = 0
+let isPinging = false
+// Claude Code's own idle compaction, read at start and on each tick, not on every band render.
+let compactionOn = true
 
 async function refreshSnap($: EngineInterface): Promise<void> {
   const usage = await $.session.usage()
   const model = await $.session.model()
   const next: Snap = { ctx: usage.context.tokens ?? 0, model, hasLimits: usage.rateLimits.length > 0 }
+  const held = await read($, snap)
+  // An unchanged snapshot is not written: a write redraws the band.
+  if (held.ctx === next.ctx && held.model === next.model && held.hasLimits === next.hasLimits) return
   await update($, snap, () => next)
 }
 
@@ -106,15 +114,16 @@ async function remindIfDue($: EngineInterface): Promise<void> {
   await notify($, `Cache cools in ${fmtDur(last + TTL_MS - now)}`, `${folderOf(cwd)} · ${fmtK(current.ctx)} tokens`)
 }
 
-function armReminder($: EngineInterface): void {
+function armReminder($: EngineInterface, delay = settings.remindAfterMs): void {
   remindTimer?.cancel()
-  remindTimer = $.clock.after(settings.remindAfterMs, () => void remindIfDue($))
+  remindTimer = $.clock.after(Math.max(1000, delay), () => void remindIfDue($))
 }
 
 /** The next keep-warm ping, one period after the last request that touched the cache. */
 async function armPing($: EngineInterface): Promise<void> {
   pingTimer?.cancel()
   pingTimer = undefined
+  const generation = ++pingGeneration
   const current = await read($, warm)
   if (current === null) return
   const now = await $.clock.now()
@@ -123,8 +132,13 @@ async function armPing($: EngineInterface): Promise<void> {
     return
   }
   const last = await read($, lastRequestAt)
-  // Nothing to keep warm before a request, and a cold cache is not worth paying for.
-  if (last === 0 || now - last >= TTL_MS) return
+  if (last === 0) return
+  // A cache already cold (a laptop that slept through the ping) is not worth paying to rewrite.
+  if (now - last >= TTL_MS) {
+    await endWarm($, 'error', 'Keep-warm stopped: the cache went cold')
+    return
+  }
+  if (generation !== pingGeneration) return
   const delay = Math.min(Math.max(1000, last + PING_EVERY_MS - now), current.deadline - now)
   pingTimer = $.clock.after(delay, () => void runPing($))
 }
@@ -140,6 +154,7 @@ async function touch($: EngineInterface): Promise<void> {
 
 async function runPing($: EngineInterface): Promise<void> {
   pingTimer = undefined
+  if (isPinging) return
   const current = await read($, warm)
   if (current === null) return
   const now = await $.clock.now()
@@ -152,12 +167,20 @@ async function runPing($: EngineInterface): Promise<void> {
     await armPing($)
     return
   }
-  await doPing($, 'window')
+  isPinging = true
+  try {
+    await doPing($, 'window')
+  } finally {
+    isPinging = false
+  }
 }
 
 async function endWarm($: EngineInterface, why: 'expired' | 'stopped' | 'error', message?: string): Promise<void> {
   pingTimer?.cancel()
   pingTimer = undefined
+  pingGeneration++
+  // Already ended (the deadline timer and the tick can both get here): one toast.
+  if ((await read($, warm)) === null) return
   await update($, warm, () => null)
   if (why === 'expired') $.ui.toast('Keep-warm ended', { timeoutMs: TOAST_MS })
   else if (why === 'stopped') $.ui.toast('Keep-warm stopped', { timeoutMs: TOAST_MS })
@@ -170,7 +193,8 @@ async function doPing($: EngineInterface, kind: 'window' | 'once'): Promise<void
   const now = await $.clock.now()
   const last = await read($, lastRequestAt)
   if (last > 0 && now - last >= TTL_MS) {
-    $.ui.toast('The cache is already cold', { timeoutMs: TOAST_MS })
+    if (kind === 'window') await endWarm($, 'error', 'Keep-warm stopped: the cache went cold')
+    else $.ui.toast('The cache is already cold', { timeoutMs: TOAST_MS })
     return
   }
   let reply: Awaited<ReturnType<EngineInterface['model']['fork']>> | undefined
@@ -252,9 +276,20 @@ async function tick($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
   await update($, nowAt, () => now)
   await refreshSnap($)
+  compactionOn = await isIdleCompactionOn($)
   const current = await read($, warm)
   if (current !== null && now >= current.deadline) await endWarm($, 'expired')
+  // A safety net for a nudge whose timer was lost (a reload, a laptop asleep at the time).
+  else await remindIfDue($)
+}
+
+/** After a reload or a re-enable, the state is back but its timers are not: arm them again. */
+async function rearm($: EngineInterface): Promise<void> {
   const last = await read($, lastRequestAt)
+  if (last === 0) return
+  const now = await $.clock.now()
+  if (now - last < TTL_MS) armReminder($, last + settings.remindAfterMs - now)
+  await armPing($)
 }
 
 function stopTimers(): void {
@@ -275,6 +310,8 @@ export const register: Register = on => {
     })
     await update($, nowAt, await $.clock.now().then(now => () => now))
     await refreshSnap($)
+    compactionOn = await isIdleCompactionOn($)
+    await rearm($)
     $.clock.every(TICK_MS, () => void tick($))
     await $.command.register({
       name: 'nudge',
@@ -285,31 +322,39 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // /clear, /resume and a fork start another conversation: its cache starts over.
+  // /clear starts another conversation, cold. A resume or a fork may find the old one's cache still
+  // warm: its last response says how long ago it was cached.
   on('classic.SessionStart', { source: ['clear', 'resume', 'fork'] }, async ($, e, next) => {
     stopTimers()
+    pingGeneration++
     await update($, warm, () => null)
-    await update($, lastRequestAt, () => 0)
+    const now = await $.clock.now()
+    const ago = e.source === 'clear' ? undefined : e.seconds_since_last_response
+    const isWarm = ago !== undefined && ago * 1000 < TTL_MS
+    await update($, lastRequestAt, () => (isWarm ? now - ago * 1000 : 0))
+    if (isWarm) armReminder($, settings.remindAfterMs - ago * 1000)
     await refreshSnap($)
     return next(e)
   })
 
   // A turn starts with a request, and each later step of it sends another: the cache's hour
   // starts at the latest one.
-  on('turn.start', async ($, e, next) => {
-    if (!e.agentId) await touch($)
+  // The request is not held up for the bookkeeping.
+  on('turn.start', ($, e, next) => {
+    if (!e.agentId) void touch($).catch(() => undefined)
     return next(e)
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (!e.agentId) await touch($)
+    if (!e.agentId) void touch($).catch(() => undefined)
     return yield* next(e)
   })
 
   // A compaction replaced the conversation: the new one is cold until its next request.
   on('session.compact', async ($, e, next) => {
     const result = await next(e)
-    if (!e.agentId) {
+    // A precompute installs nothing, and a skipped compaction leaves the conversation as it was.
+    if (!e.agentId && e.trigger !== 'precompute' && result.messages !== undefined) {
       stopTimers()
       await update($, warm, () => null)
       await update($, lastRequestAt, () => 0)
@@ -330,6 +375,10 @@ export const register: Register = on => {
     }
     const hours = parseHours(arg)
     if (hours === null) return { text: `Usage: /nudge [hours 0-${MAX_HOURS} | off]` }
+    await refreshSnap($)
+    if (isIdleCompactAhead((await read($, snap)).ctx, settings, compactionOn)) {
+      return { text: 'This conversation is over the idle-compaction size: Claude Code will compact it at minute 54 whatever keep-warm does. Hand off or compact instead.' }
+    }
     await startWarm($, hours)
     return {}
   })
@@ -346,7 +395,7 @@ export const register: Register = on => {
       ctx: current.ctx,
       minTokens: settings.minTokens ?? thresholdTokens(priceOf(current.model)),
       warmDeadline: warming?.deadline,
-      isCompactAhead: isIdleCompactAhead(current.ctx, settings, await isIdleCompactionOn($)),
+      isCompactAhead: isIdleCompactAhead(current.ctx, settings, compactionOn),
       columns: e.props.bodyColumns,
     })
     if (!view) return next(e)
@@ -389,7 +438,7 @@ export const register: Register = on => {
     const warming = await read($, warm)
     const typed = await read($, hoursText)
     const lastNote = await read($, note)
-    const isCompactAhead = isIdleCompactAhead(current.ctx, settings, await isIdleCompactionOn($))
+    const isCompactAhead = isIdleCompactAhead(current.ctx, settings, compactionOn)
 
     const price = priceOf(current.model)
     const basis = current.hasLimits ? 'subscription' : 'api'

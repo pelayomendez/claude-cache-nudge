@@ -67,7 +67,11 @@ function engine(on: On, ctx: number) {
   on('ui.close', () => ({ value: undefined }) as never)
   on('config.list', () => ({ value: [] }) as never)
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}) as never)
-  return { clock, notices, runs, prompts }
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => (toasts.push(e.text), { value: undefined }) as never)
+  let forks = 0
+  on('model.fork', () => (forks++, { value: { isAnswered: true, text: 'ok', usage: { input_tokens: 5, output_tokens: 1, cache_read_input_tokens: ctx, cache_creation_input_tokens: 0 } } }) as never)
+  return { clock, notices, runs, prompts, toasts, forks: () => forks }
 }
 
 async function request($: Parameters<Parameters<typeof test>[1]>[0]) {
@@ -110,4 +114,37 @@ test('idle compaction needs its own row, auto-compact, and no DISABLE_AUTO_COMPA
   expect(idleCompactionOn({ idleCompaction: false }, {})).toBe(false)
   expect(idleCompactionOn({ autoCompactEnabled: false }, {})).toBe(false)
   expect(idleCompactionOn({}, { DISABLE_AUTO_COMPACT: '1' })).toBe(false)
+})
+
+const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} }
+const typed = (args: string) => ({ command: 'nudge', args, origin: { kind: 'composer' as const }, presentation: { isFullscreen: false, columns: 100 } })
+
+test('keep-warm pings every 50 minutes until its hours are up, then ends once and the band goes back to the countdown', async ($, on) => {
+  mock.env(on, {})
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  const seen = engine(on, 120_000)
+  await $.session.start(START)
+  await request($)
+  await seen.clock.advance(MIN)
+  await $.command.run(typed('3') as never)
+  const band = async () => JSON.stringify(await (await $.ui.mount({ plugin: 'cache-nudge', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS } as never)).drawn())
+  expect(await band()).toContain('warm 3h')
+  await seen.clock.advance(50 * MIN)
+  expect(seen.forks()).toBe(1)
+  await seen.clock.advance(3 * 60 * MIN)
+  expect(seen.forks()).toBe(3)
+  expect(seen.toasts.filter(text => text === 'Keep-warm ended')).toHaveLength(1)
+  expect(await band()).not.toContain('warm 3h')
+})
+
+test('/nudge <hours> refuses keep-warm on a conversation Claude Code will idle-compact', async ($, on) => {
+  mock.env(on, {})
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  const seen = engine(on, 250_000)
+  await $.session.start(START)
+  await request($)
+  const answer = await $.command.run(typed('3') as never)
+  expect(answer.text).toContain('idle-compaction size')
+  await seen.clock.advance(60 * MIN)
+  expect(seen.forks()).toBe(0)
 })
