@@ -106,7 +106,12 @@ test('the band: green countdown, amber in the last ten minutes, red when cold, h
   expect(bandView({ ...base, now: 52 * MIN, isCompactAhead: true })?.buttons).toEqual(['handoff', 'more'])
   expect(bandView({ ...base, warmDeadline: 18 * MIN + 192 * MIN })).toEqual({ text: 'warm 3h12m · 120k', color: 'green', buttons: ['stop', 'more'] })
   expect(bandView({ ...base, columns: 40 })?.buttons).toEqual(['more'])
-  expect(bandView({ ...base, columns: 24 })).toEqual({ text: 'cache 42m left', color: 'green', buttons: [], isQuiet: true })
+  expect(bandView({ ...base, columns: 24 })).toEqual({ text: 'cache 42m left · 120k', color: 'green', buttons: [], isQuiet: true })
+  expect(bandView({ ...base, columns: 18 })).toEqual({ text: 'cache 42m left', color: 'green', buttons: [], isQuiet: true })
+  // Amber: '[ warm ] [ handoff ] [ more ]' after the text needs 50 columns; below that only [ more ].
+  const amber = { ...base, now: 52 * MIN }
+  expect(bandView({ ...amber, columns: 52 })?.buttons).toEqual(['warm', 'handoff', 'more'])
+  expect(bandView({ ...amber, columns: 45 })?.buttons).toEqual(['more'])
 })
 
 test('idle compaction needs its own row, auto-compact, and no DISABLE_AUTO_COMPACT', () => {
