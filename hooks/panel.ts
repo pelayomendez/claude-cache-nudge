@@ -101,3 +101,38 @@ export function panelRows(input: PanelInput): Row[] {
   rows.push([{ text: basis === 'subscription' ? '~ token-equivalent on your plan · $ at API prices' : '~ token-equivalent · $ at API prices', dim: true }])
   return rows
 }
+
+export type ActionId = 'stop' | 'warm' | 'then-compact' | 'once' | 'handoff' | 'compact' | 'close'
+export type Action = { id: ActionId; hotkey: string; label: string; hint: string; color?: string; isBest?: true }
+
+/**
+ * The panel's actions as a menu: a hotkey, a label in its option's colour, and one dim line saying
+ * what it does. Only what still makes sense is listed; the cheapest option is marked.
+ */
+// No hotkey is a digit or h: the hours field takes "1.5h".
+export function panelActions(input: {
+  isCold: boolean
+  isCompactAhead: boolean
+  isSmall: boolean
+  hours: number
+  recommended: Pick
+  warming?: { leftMs: number; pings: number }
+  isCompactAfter: boolean
+}): Action[] {
+  const { isCold, isCompactAhead, isSmall, hours, recommended, warming, isCompactAfter } = input
+  if (isCold) return [{ id: 'close', hotkey: 'q', label: 'Close', hint: 'the cache is cold: just send' }]
+  const best = (pick: Pick) => (!isSmall && recommended === pick ? ({ isBest: true } as const) : {})
+  const actions: Action[] = []
+  if (warming) {
+    actions.push({ id: 'stop', hotkey: 's', label: 'Stop keep-warm', hint: `${fmtDur(warming.leftMs)} left, ${warming.pings} ping${warming.pings === 1 ? '' : 's'} so far`, color: 'green' })
+  } else if (!isCompactAhead) {
+    actions.push({ id: 'warm', hotkey: 'w', label: `Keep warm ${fmtHours(hours)}`, hint: 'a tiny hidden request every 50 min while you are away', color: 'green', ...best('warm') })
+  }
+  if (!isCompactAhead) {
+    actions.push({ id: 'then-compact', hotkey: 't', label: `Then compact: ${isCompactAfter ? 'on' : 'off'}`, hint: 'when keep-warm ends and you are still away', color: isCompactAfter ? 'green' : undefined })
+    actions.push({ id: 'once', hotkey: 'p', label: 'Ping once', hint: 'one more hour of cache, now' })
+  }
+  actions.push({ id: 'handoff', hotkey: 'f', label: 'Write handoff', hint: 'a file to /clear from when you are back', color: 'cyan' })
+  actions.push({ id: 'compact', hotkey: 'c', label: 'Compact now', hint: 'summarise the conversation while the cache is warm', color: 'magenta', ...best('compact') })
+  return actions
+}

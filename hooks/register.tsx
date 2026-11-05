@@ -22,7 +22,8 @@ import {
   priceOf,
   thresholdTokens,
 } from './model.ts'
-import { panelRows } from './panel.ts'
+import { panelActions, panelRows } from './panel.ts'
+import type { ActionId } from './panel.ts'
 import { HANDOFF_PROMPT, bandView, shouldCompactAtEnd, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 import type { Settings } from './nudge.ts'
 
@@ -479,6 +480,26 @@ export const register: Register = on => {
     const plan = makePlan({ ctx: current.ctx, price, basis, hours, lastReq: last, now, isWarm: !isCold })
     const narrow = e.props.bodyColumns < 44
 
+    const actions = panelActions({
+      isCold,
+      isCompactAhead,
+      isSmall: current.ctx < (settings.minTokens ?? thresholdTokens(price)),
+      hours,
+      recommended: plan.recommended,
+      warming: warming === null ? undefined : { leftMs: warming.deadline - now, pings: warming.pings },
+      isCompactAfter: thenCompact,
+    })
+    const press = (id: ActionId) => {
+      if (id === 'stop') void endWarm($, 'stopped')
+      else if (id === 'warm') {
+        if (parsed === null) $.ui.toast(`Enter hours between 0 and ${MAX_HOURS}`, { timeoutMs: TOAST_MS })
+        else void startWarm($, parsed)
+      } else if (id === 'then-compact') void update($, compactAfter, (held: boolean) => !held)
+      else if (id === 'once') void doPing($, 'once')
+      else if (id === 'handoff') void writeHandoff($)
+      else if (id === 'compact') void $.clock.after(50, () => void compactNow($))
+      else void $.ui.close({ id: PANE })
+    }
     const rows = panelRows({
       price,
       basis,
@@ -521,36 +542,22 @@ export const register: Register = on => {
         )}
         {parsed === null && <Text color="yellow">{`Hours: 0 to ${MAX_HOURS}`}</Text>}
         {lastNote !== '' && <Text dimColor>{lastNote}</Text>}
-        {warming !== null && (
+        <Text> </Text>
+        {actions.map(action => (
           <Button
-            key="stop"
-            label={`Stop keep-warm (${fmtDur(warming.deadline - now)} left, ${warming.pings} ping${warming.pings === 1 ? '' : 's'})`}
-            autoFocus
-            onPress={() => void endWarm($, 'stopped')}
-          />
-        )}
-        {warming === null && !isCold && !isCompactAhead && (
-          <Button
-            key="warm"
-            label={`Keep warm ${fmtHours(hours)}`}
-            autoFocus
-            onPress={() => {
-              if (parsed === null) $.ui.toast(`Enter hours between 0 and ${MAX_HOURS}`, { timeoutMs: TOAST_MS })
-              else void startWarm($, parsed)
-            }}
-          />
-        )}
-        {!isCold && !isCompactAhead && (
-          <Button
-            key="then-compact"
-            label={`Then compact if I'm still away: ${thenCompact ? 'on' : 'off'}`}
-            onPress={() => void update($, compactAfter, (held: boolean) => !held)}
-          />
-        )}
-        {!isCold && !isCompactAhead && <Button key="once" label="Ping once (+1h)" onPress={() => void doPing($, 'once')} />}
-        {!isCold && <Button key="handoff" label="Write handoff" onPress={() => void writeHandoff($)} />}
-        <Button key="compact" label="Compact now" onPress={() => void $.clock.after(50, () => void compactNow($))} />
-        {isCold && <Button key="close" label="Dismiss" autoFocus onPress={() => void $.ui.close({ id: PANE })} />}
+            key={action.id}
+            plain
+            hotkey={action.hotkey}
+            autoFocus={action.isBest || (action.id === 'stop' || action.id === 'close') ? true : undefined}
+            onPress={() => press(action.id)}
+          >
+            <Text color={action.color} bold={action.isBest}>
+              {narrow ? action.label : action.label.padEnd(20)}
+            </Text>
+            {!narrow && <Text dimColor>{action.hint}</Text>}
+            {action.isBest && !narrow && <Text color="green">  ◂ cheapest</Text>}
+          </Button>
+        ))}
       </Box>
     )
   })
