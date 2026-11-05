@@ -113,14 +113,17 @@ export function bandView(input: {
   minTokens: number
   warmDeadline?: number
   isCompactAhead: boolean
+  /** Keep-warm will compact when it ends, if you are still away. */
+  isCompactAfter?: boolean
   columns: number
 }): BandView | undefined {
-  const { now, lastRequestAt, ctx, minTokens, warmDeadline, isCompactAhead, columns } = input
+  const { now, lastRequestAt, ctx, minTokens, warmDeadline, isCompactAhead, isCompactAfter, columns } = input
   const size = tokensText(ctx)
   const fit = (view: BandView): BandView =>
     columns < 30 ? { ...view, text: view.text.split(' · ')[0] ?? view.text, buttons: [] } : columns < 56 ? { ...view, buttons: view.buttons.filter(one => one === 'more' || one === 'stop') } : view
   if (warmDeadline !== undefined && now < warmDeadline) {
-    return fit({ text: `warm ${minutesText(warmDeadline - now)} · ${size}`, color: 'green', buttons: ['stop', 'more'] })
+    const then = isCompactAfter ? ' · then compact' : ''
+    return fit({ text: `warm ${minutesText(warmDeadline - now)} · ${size}${then}`, color: 'green', buttons: ['stop', 'more'] })
   }
   if (lastRequestAt === 0 || ctx < minTokens) return undefined
   const left = lastRequestAt + TTL_MS - now
@@ -132,6 +135,27 @@ export function bandView(input: {
     color: 'yellow',
     buttons: isCompactAhead ? ['handoff', 'more'] : ['warm', 'handoff', 'more'],
   })
+}
+
+/**
+ * Whether keep-warm, ending at its deadline, should compact: the toggle is on, you have not run a
+ * turn since the last ping (or since keep-warm started, before any ping), the cache is still warm,
+ * and the conversation is big enough for a compaction to pay.
+ */
+export function shouldCompactAtEnd(input: {
+  isOn: boolean
+  now: number
+  lastTurnAt: number
+  warmStartedAt: number
+  lastPingAt?: number
+  lastRequestAt: number
+  ctx: number
+  minTokens: number
+}): boolean {
+  const { isOn, now, lastTurnAt, warmStartedAt, lastPingAt, lastRequestAt, ctx, minTokens } = input
+  if (!isOn || ctx < minTokens) return false
+  if (lastTurnAt >= (lastPingAt ?? warmStartedAt)) return false
+  return lastRequestAt > 0 && now - lastRequestAt < TTL_MS - MIN
 }
 
 /** Whether Claude Code's idle compaction can run: its own row, and auto-compact, both on. */
