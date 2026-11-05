@@ -19,8 +19,8 @@ test('a warm panel: bar, what the next message costs now and once cold, options 
   const shown = text(rows)
   expect(shown).toContain('Cache ██████████████░░░░░░ 42m left')
   expect(shown).toContain('Next message now: ~6k $0.02 · once cold: ~240k $0.96')
-  expect(shown).toContain('Away for 4h:')
-  expect(shown).toMatch(/▸ Keep warm\s+4 pings\s+~24k\s+\$0\.10\s+cheapest/)
+  expect(shown).toContain('Away for 4h (change the hours below)')
+  expect(shown).toMatch(/▸ Keep warm\s+4 pings\s+~24k\s+\$0\.10\s+◂ cheapest/)
   expect(shown).toContain('Keep-warm stays cheaper than compacting')
 })
 

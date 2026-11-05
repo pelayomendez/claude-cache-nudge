@@ -34,8 +34,8 @@ opus-5-5 · 120k tokens
 
 Next message now: ~6k $0.02 · once cold: ~240k $0.96
 
-Away for 4h:
-▸ Keep warm    4 pings   ~24k    $0.10  cheapest
+Away for 4h (change the hours below)
+▸ Keep warm    4 pings   ~24k    $0.10  ◂ cheapest
   Compact now            ~85k    $0.34
   Do nothing             ~234k   $0.94
 

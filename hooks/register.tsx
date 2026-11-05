@@ -493,17 +493,16 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {rows.map((row, at) => (
-          <Box key={`row-${at}`} flexDirection="row">
-            {row.length === 0 ? (
-              <Text> </Text>
-            ) : (
-              row.map((piece, index) => (
-                <Text key={`piece-${index}`} color={piece.color} bold={piece.bold} dimColor={piece.dim}>
-                  {piece.text}
-                </Text>
-              ))
-            )}
-          </Box>
+          // One Text per line with styled runs inside: separate Texts in a row lose their padding.
+          <Text key={`row-${at}`}>
+            {row.length === 0
+              ? ' '
+              : row.map((piece, index) => (
+                  <Text key={`piece-${index}`} color={piece.color} bold={piece.bold} dimColor={piece.dim}>
+                    {piece.text}
+                  </Text>
+                ))}
+          </Text>
         ))}
         {!isCold && (
           <Input
