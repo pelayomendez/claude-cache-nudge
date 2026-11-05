@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" width="160" alt=""></p>
+
 # claude-cache-nudge
 
 [Website](https://pelayomendez.github.io/claude-cache-nudge/) · [Changelog](CHANGELOG.md)
