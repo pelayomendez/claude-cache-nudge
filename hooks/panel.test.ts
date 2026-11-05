@@ -36,3 +36,10 @@ test('a cold panel says only what the next message rewrites', () => {
   expect(shown).toContain('Next message rewrites the cache: ~240k')
   expect(shown).not.toContain('Away for')
 })
+
+test('the README example is what the panel computes for 120k tokens on Opus 5.5, 4h away', () => {
+  const shown = text(panelRows({ price: OPUS, basis: 'api', ctx: 120_000, leftMs: 42 * MIN, plan: plan(120_000, 4), isCompactAhead: false, isSmall: false, narrow: false }))
+  expect(shown).toMatch(/Compact now\s+~85k\s+\$0\.34/)
+  expect(shown).toMatch(/Do nothing\s+~234k\s+\$0\.94/)
+  expect(shown).toContain('for up to ~11.8h away')
+})
