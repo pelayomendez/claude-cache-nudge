@@ -47,6 +47,7 @@ Change the hours and the costs follow.
 | Option | What it does |
 | --- | --- |
 | **Keep warm** (`[warm]` on the band: 4 hours) | A tiny hidden request every 50 minutes, read from the cache, which restarts its hour. Never shown in the conversation; it does not grow it. Stops at the hours you set, or with `/nudge off`. |
+| **Then compact if I'm still away** | A toggle for keep-warm, off by default, per session. When keep-warm ends and you have not typed since its last ping, it compacts while the cache is still warm, so coming back costs only the summary. The band reads `warm 1h40m · 120k · then compact`. |
 | **Ping once** | One such request: about an hour more. |
 | **Write handoff** | Asks the session, in a visible turn and while the cache is warm, to write a handoff you can `/clear` from. |
 | **Compact now** | Claude Code's own `/compact`. |
@@ -64,6 +65,7 @@ Environment variables, read when a session starts:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CACHE_NUDGE_REMIND_MIN` | `50` | Minutes idle before the nudge, 10 to 58 |
+| `CACHE_NUDGE_COMPACT_AFTER_WARM` | off | `1` turns the then-compact toggle on in every new session |
 | `CACHE_NUDGE_MIN_TOKENS` | the model's threshold | Nudge only from this context size |
 
 ## Install
