@@ -22,8 +22,9 @@ import {
   priceOf,
   thresholdTokens,
 } from './model.ts'
-import { panelRows } from './panel.ts'
-import { HANDOFF_PROMPT, bandView, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
+import { panelActions, panelRows } from './panel.ts'
+import type { ActionId } from './panel.ts'
+import { HANDOFF_PROMPT, bandView, shouldCompactAtEnd, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 import type { Settings } from './nudge.ts'
 
 const PANE = 'cache-nudge'
@@ -40,6 +41,8 @@ const hoursText = atom({ plugin: 'cache-nudge', key: 'hoursText' } as const, '')
 const warm = atom({ plugin: 'cache-nudge', key: 'warm' } as const, null)
 const snap = atom({ plugin: 'cache-nudge', key: 'snap' } as const, EMPTY_SNAP)
 const note = atom({ plugin: 'cache-nudge', key: 'note' } as const, '')
+const compactAfter = atom({ plugin: 'cache-nudge', key: 'compactAfter' } as const, false)
+const lastTurnAt = atom({ plugin: 'cache-nudge', key: 'lastTurnAt' } as const, 0)
 
 let settings: Settings = settingsFrom({})
 let remindTimer: Timer | undefined
@@ -151,6 +154,13 @@ async function touch($: EngineInterface): Promise<void> {
   await armPing($)
 }
 
+/** A turn of yours: it touches the cache like any request, and says you are here. */
+async function markTurn($: EngineInterface): Promise<void> {
+  const now = await $.clock.now()
+  await update($, lastTurnAt, () => now)
+  await touch($)
+}
+
 async function runPing($: EngineInterface): Promise<void> {
   pingTimer = undefined
   if (isPinging) return
@@ -179,8 +189,28 @@ async function endWarm($: EngineInterface, why: 'expired' | 'stopped' | 'error',
   pingTimer = undefined
   pingGeneration++
   // Already ended (the deadline timer and the tick can both get here): one toast.
-  if ((await read($, warm)) === null) return
+  const ending = await read($, warm)
+  if (ending === null) return
   await update($, warm, () => null)
+  if (why === 'expired') {
+    const now = await $.clock.now()
+    const current = await read($, snap)
+    const isCompacting = shouldCompactAtEnd({
+      isOn: await read($, compactAfter),
+      now,
+      lastTurnAt: await read($, lastTurnAt),
+      warmStartedAt: ending.startedAt,
+      lastPingAt: ending.last?.at,
+      lastRequestAt: await read($, lastRequestAt),
+      ctx: current.ctx,
+      minTokens: settings.minTokens ?? thresholdTokens(priceOf(current.model)),
+    })
+    if (isCompacting) {
+      $.ui.toast('Keep-warm ended: compacting while the cache is still warm', { timeoutMs: 8000 })
+      $.clock.after(50, () => void compactNow($))
+      return
+    }
+  }
   if (why === 'expired') $.ui.toast('Keep-warm ended', { timeoutMs: TOAST_MS })
   else if (why === 'stopped') $.ui.toast('Keep-warm stopped', { timeoutMs: TOAST_MS })
   else $.ui.toast(message ?? 'Keep-warm stopped: ping failed', { timeoutMs: 8000 })
@@ -308,6 +338,7 @@ export const register: Register = on => {
       CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: await $.env.get('CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS'),
     })
     await update($, nowAt, await $.clock.now().then(now => () => now))
+    if ((await $.env.get('CACHE_NUDGE_COMPACT_AFTER_WARM')) === '1') await update($, compactAfter, () => true)
     await refreshSnap($)
     compactionOn = await isIdleCompactionOn($)
     await rearm($)
@@ -340,12 +371,12 @@ export const register: Register = on => {
   // starts at the latest one.
   // The request is not held up for the bookkeeping.
   on('turn.start', ($, e, next) => {
-    if (!e.agentId) void touch($).catch(() => undefined)
+    if (!e.agentId) void markTurn($).catch(() => undefined)
     return next(e)
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (!e.agentId) void touch($).catch(() => undefined)
+    if (!e.agentId) void markTurn($).catch(() => undefined)
     return yield* next(e)
   })
 
@@ -395,6 +426,7 @@ export const register: Register = on => {
       minTokens: settings.minTokens ?? thresholdTokens(priceOf(current.model)),
       warmDeadline: warming?.deadline,
       isCompactAhead: isIdleCompactAhead(current.ctx, settings, compactionOn),
+      isCompactAfter: await read($, compactAfter),
       columns: e.props.bodyColumns,
     })
     if (!view) return next(e)
@@ -437,6 +469,7 @@ export const register: Register = on => {
     const warming = await read($, warm)
     const typed = await read($, hoursText)
     const lastNote = await read($, note)
+    const thenCompact = await read($, compactAfter)
     const isCompactAhead = isIdleCompactAhead(current.ctx, settings, compactionOn)
 
     const price = priceOf(current.model)
@@ -447,6 +480,26 @@ export const register: Register = on => {
     const plan = makePlan({ ctx: current.ctx, price, basis, hours, lastReq: last, now, isWarm: !isCold })
     const narrow = e.props.bodyColumns < 44
 
+    const actions = panelActions({
+      isCold,
+      isCompactAhead,
+      isSmall: current.ctx < (settings.minTokens ?? thresholdTokens(price)),
+      hours,
+      recommended: plan.recommended,
+      warming: warming === null ? undefined : { leftMs: warming.deadline - now, pings: warming.pings },
+      isCompactAfter: thenCompact,
+    })
+    const press = (id: ActionId) => {
+      if (id === 'stop') void endWarm($, 'stopped')
+      else if (id === 'warm') {
+        if (parsed === null) $.ui.toast(`Enter hours between 0 and ${MAX_HOURS}`, { timeoutMs: TOAST_MS })
+        else void startWarm($, parsed)
+      } else if (id === 'then-compact') void update($, compactAfter, (held: boolean) => !held)
+      else if (id === 'once') void doPing($, 'once')
+      else if (id === 'handoff') void writeHandoff($)
+      else if (id === 'compact') void $.clock.after(50, () => void compactNow($))
+      else void $.ui.close({ id: PANE })
+    }
     const rows = panelRows({
       price,
       basis,
@@ -461,17 +514,16 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {rows.map((row, at) => (
-          <Box key={`row-${at}`} flexDirection="row">
-            {row.length === 0 ? (
-              <Text> </Text>
-            ) : (
-              row.map((piece, index) => (
-                <Text key={`piece-${index}`} color={piece.color} bold={piece.bold} dimColor={piece.dim}>
-                  {piece.text}
-                </Text>
-              ))
-            )}
-          </Box>
+          // One Text per line with styled runs inside: separate Texts in a row lose their padding.
+          <Text key={`row-${at}`}>
+            {row.length === 0
+              ? ' '
+              : row.map((piece, index) => (
+                  <Text key={`piece-${index}`} color={piece.color} bold={piece.bold} dimColor={piece.dim}>
+                    {piece.text}
+                  </Text>
+                ))}
+          </Text>
         ))}
         {!isCold && (
           <Input
@@ -490,29 +542,22 @@ export const register: Register = on => {
         )}
         {parsed === null && <Text color="yellow">{`Hours: 0 to ${MAX_HOURS}`}</Text>}
         {lastNote !== '' && <Text dimColor>{lastNote}</Text>}
-        {warming !== null && (
+        <Text> </Text>
+        {actions.map(action => (
           <Button
-            key="stop"
-            label={`Stop keep-warm (${fmtDur(warming.deadline - now)} left, ${warming.pings} ping${warming.pings === 1 ? '' : 's'})`}
-            autoFocus
-            onPress={() => void endWarm($, 'stopped')}
-          />
-        )}
-        {warming === null && !isCold && !isCompactAhead && (
-          <Button
-            key="warm"
-            label={`Keep warm ${fmtHours(hours)}`}
-            autoFocus
-            onPress={() => {
-              if (parsed === null) $.ui.toast(`Enter hours between 0 and ${MAX_HOURS}`, { timeoutMs: TOAST_MS })
-              else void startWarm($, parsed)
-            }}
-          />
-        )}
-        {!isCold && !isCompactAhead && <Button key="once" label="Ping once (+1h)" onPress={() => void doPing($, 'once')} />}
-        {!isCold && <Button key="handoff" label="Write handoff" onPress={() => void writeHandoff($)} />}
-        <Button key="compact" label="Compact now" onPress={() => void $.clock.after(50, () => void compactNow($))} />
-        {isCold && <Button key="close" label="Dismiss" autoFocus onPress={() => void $.ui.close({ id: PANE })} />}
+            key={action.id}
+            plain
+            hotkey={action.hotkey}
+            autoFocus={action.isBest || (action.id === 'stop' || action.id === 'close') ? true : undefined}
+            onPress={() => press(action.id)}
+          >
+            <Text color={action.color} bold={action.isBest}>
+              {narrow ? action.label : action.label.padEnd(20)}
+            </Text>
+            {!narrow && <Text dimColor>{action.hint}</Text>}
+            {action.isBest && !narrow && <Text color="green">  ◂ cheapest</Text>}
+          </Button>
+        ))}
       </Box>
     )
   })

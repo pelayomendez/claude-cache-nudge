@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { MIN, makePlan, priceOf } from './model.ts'
-import { cacheBar, panelRows } from './panel.ts'
+import { cacheBar, panelActions, panelRows } from './panel.ts'
 
 const OPUS = priceOf('claude-opus-5-5')
 const text = (rows: { text: string }[][]) => rows.map(row => row.map(piece => piece.text).join('')).join('\n')
@@ -19,8 +19,8 @@ test('a warm panel: bar, what the next message costs now and once cold, options 
   const shown = text(rows)
   expect(shown).toContain('Cache ██████████████░░░░░░ 42m left')
   expect(shown).toContain('Next message now: ~6k $0.02 · once cold: ~240k $0.96')
-  expect(shown).toContain('Away for 4h:')
-  expect(shown).toMatch(/▸ Keep warm\s+4 pings\s+~24k\s+\$0\.10\s+cheapest/)
+  expect(shown).toContain('Away for 4h (change the hours below)')
+  expect(shown).toMatch(/▸ Keep warm\s+4 pings\s+~24k\s+\$0\.10\s+◂ cheapest/)
   expect(shown).toContain('Keep-warm stays cheaper than compacting')
 })
 
@@ -42,4 +42,17 @@ test('the README example is what the panel computes for 120k tokens on Opus 5.5,
   expect(shown).toMatch(/Compact now\s+~85k\s+\$0\.34/)
   expect(shown).toMatch(/Do nothing\s+~234k\s+\$0\.94/)
   expect(shown).toContain('for up to ~11.8h away')
+})
+
+test('the panel menu: hotkeys, the cheapest marked, and only what still makes sense', () => {
+  const base = { isCold: false, isCompactAhead: false, isSmall: false, hours: 4, recommended: 'warm' as const, isCompactAfter: false }
+  const ids = (actions: { id: string }[]) => actions.map(one => one.id)
+  const warm = panelActions(base)
+  expect(ids(warm)).toEqual(['warm', 'then-compact', 'once', 'handoff', 'compact'])
+  expect(warm.map(one => one.hotkey)).toEqual(['w', 't', 'p', 'f', 'c'])
+  expect(warm.find(one => one.isBest)?.id).toBe('warm')
+  expect(ids(panelActions({ ...base, isCompactAhead: true, recommended: 'compact' }))).toEqual(['handoff', 'compact'])
+  expect(ids(panelActions({ ...base, warming: { leftMs: 100 * MIN, pings: 2 } }))[0]).toBe('stop')
+  expect(ids(panelActions({ ...base, isCold: true }))).toEqual(['close'])
+  expect(panelActions({ ...base, isSmall: true }).some(one => one.isBest)).toBe(false)
 })
