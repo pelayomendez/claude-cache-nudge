@@ -26,7 +26,23 @@ Red once cold (`cache cold · next message re-caches 120k`). While keep-warm run
 
 **At minute 50 of idle,** with the cache still warm, it also nudges you once: a system notification, through the channel Claude Code uses for its own, and inside [herdr](https://herdr.dev) a herdr notification as well. Nothing else runs on its own.
 
-**`[more]`, or `/nudge`,** opens the panel: how long you will be away, what each option would cost, and the cheapest one.
+**`[more]`, or `/nudge`,** opens the panel:
+
+```
+Cache ██████████████░░░░░░ 42m left
+opus-5-5 · 120k tokens
+
+Next message now: ~6k $0.02 · once cold: ~240k $0.96
+
+Away for 4h:
+▸ Keep warm    4 pings   ~24k    $0.10  cheapest
+  Compact now            ~66k    $0.26
+  Do nothing             ~234k   $0.94
+
+Keep-warm stays cheaper than compacting for up to ~16.0h away.
+```
+
+Change the hours and the costs follow.
 
 | Option | What it does |
 | --- | --- |
