@@ -45,7 +45,7 @@ export function panelRows(input: PanelInput): Row[] {
   const isCold = leftMs !== undefined && leftMs <= 0
   const status = leftMs === undefined ? 'no request yet' : isCold ? `cold for ${fmtDur(-leftMs)}` : `${fmtDur(leftMs)} left`
   rows.push([
-    { text: 'Cache ', bold: true },
+    { text: 'Cache ', bold: true, color: 'cyan' },
     ...(narrow ? [] : [...cacheBar(leftMs ?? 0), { text: ' ' }]),
     { text: status, bold: true, color: isCold ? 'red' : leftMs !== undefined && leftMs <= 10 * 60_000 ? 'yellow' : undefined },
   ])
@@ -54,7 +54,7 @@ export function panelRows(input: PanelInput): Row[] {
   const warmNext = ctx * x.r
   const coldNext = ctx * x.w
   rows.push([
-    { text: 'Next message ', bold: true },
+    { text: 'Next message ', bold: true, color: 'cyan' },
     { text: isCold ? 'rewrites the cache: ' : 'now: ', dim: true },
     { text: `~${fmtK(isCold ? coldNext : warmNext)}`, color: isCold ? 'red' : 'green' },
     { text: ` ${fmtUsd(toUsd(ctx * (isCold ? api.w : api.r), price))}`, dim: true },
@@ -71,7 +71,8 @@ export function panelRows(input: PanelInput): Row[] {
     rows.push([{ text: 'The cache is already cold: nothing to save now. Just send.', dim: true }])
     return rows
   }
-  rows.push([{ text: `Away for ${fmtHours(plan.hours)}:`, bold: true }])
+  rows.push([{ text: 'Away for ', bold: true, color: 'cyan' }, { text: fmtHours(plan.hours), bold: true }, { text: ' (change the hours below)', dim: true }])
+  const colorOf: Record<Pick, string> = { warm: 'green', compact: 'magenta', nothing: 'red' }
   const options: Array<[Pick, string, string, number, number]> = [
     ['warm', 'Keep warm', `${plan.pings} ping${plan.pings === 1 ? '' : 's'}`, plan.warmUnits, plan.warmUsd],
     ['compact', 'Compact now', '', plan.compactUnits, plan.compactUsd],
@@ -82,11 +83,11 @@ export function panelRows(input: PanelInput): Row[] {
     const isBest = !isOut && !isSmall && pick === plan.recommended
     rows.push([
       { text: isBest ? '▸ ' : '  ', color: 'green', bold: true },
-      { text: pad(label, 13), bold: isBest, dim: isOut },
+      { text: pad(label, 13), bold: isBest, dim: isOut, color: isOut ? undefined : colorOf[pick] },
       ...(narrow ? [] : [{ text: pad(detail, 10), dim: true }]),
-      { text: pad(isOut ? 'n/a' : `~${fmtK(units)}`, 8), color: isBest ? 'green' : undefined, dim: isOut },
+      { text: pad(isOut ? 'n/a' : `~${fmtK(units)}`, 8), bold: isBest, dim: isOut },
       { text: isOut ? '' : fmtUsd(usd), dim: true },
-      ...(isBest && !narrow ? [{ text: '  cheapest', color: 'green' }] : []),
+      ...(isBest && !narrow ? [{ text: '  ◂ cheapest', color: 'green', bold: true }] : []),
     ])
   }
   rows.push([])
