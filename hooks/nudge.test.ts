@@ -148,3 +148,15 @@ test('/nudge <hours> refuses keep-warm on a conversation Claude Code will idle-c
   await seen.clock.advance(60 * MIN)
   expect(seen.forks()).toBe(0)
 })
+
+test('the panel draws its bar, costs and controls', async ($, on) => {
+  mock.env(on, {})
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  const seen = engine(on, 120_000)
+  await $.session.start(START)
+  await request($)
+  await seen.clock.advance(18 * MIN)
+  const pane = await $.ui.mount({ plugin: 'cache-nudge', surface: 'terminal', component: 'Pane', requestId: 'cache-nudge', props: { bodyColumns: 80, bodyRows: 20 } } as never)
+  const drawn = JSON.stringify(await pane.drawn())
+  for (const text of ['42m left', 'Next message ', 'Away for 4h:', 'cheapest', '"label":"Keep warm 4h"', '"label":"Write handoff"']) expect(drawn).toContain(text)
+})

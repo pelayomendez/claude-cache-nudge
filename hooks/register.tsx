@@ -18,12 +18,11 @@ import {
   fmtHours,
   fmtK,
   makePlan,
-  optionRows,
   parseHours,
-  pickLabel,
   priceOf,
   thresholdTokens,
 } from './model.ts'
+import { panelRows } from './panel.ts'
 import { HANDOFF_PROMPT, bandView, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 import type { Settings } from './nudge.ts'
 
@@ -250,7 +249,7 @@ async function openPanel($: EngineInterface): Promise<void> {
   await refreshSnap($)
   await update($, nowAt, await $.clock.now().then(now => () => now))
   await update($, hoursText, () => '')
-  await $.ui.open({ id: PANE, title: 'Cache', focus: true, closeOnEscape: true, rows: 13 })
+  await $.ui.open({ id: PANE, title: 'Cache', focus: true, closeOnEscape: true, rows: 20 })
 }
 
 async function compactNow($: EngineInterface): Promise<void> {
@@ -409,9 +408,7 @@ export const register: Register = on => {
     } as const
     const mine = (
       <Box key="cache-nudge" flexDirection="row" justifyContent="flex-end">
-        <Text color={view.color} dimColor={view.isQuiet}>
-          {view.text}
-        </Text>
+        <Text color={view.color}>{view.text}</Text>
         {view.buttons.map(name => (
           <Box key={name} flexDirection="row">
             <Text> </Text>
@@ -450,36 +447,49 @@ export const register: Register = on => {
     const plan = makePlan({ ctx: current.ctx, price, basis, hours, lastReq: last, now, isWarm: !isCold })
     const narrow = e.props.bodyColumns < 44
 
-    const cacheText = isCold ? `cold ${fmtDur(now - last - TTL_MS)}` : last > 0 ? `${fmtDur(last + TTL_MS - now)} left` : 'no request yet'
-    let advice: string
-    if (parsed === null) advice = `Hours: 0 to ${MAX_HOURS}`
-    else if (isCold) advice = 'The cache is cold: just send.'
-    else if (current.ctx < (settings.minTokens ?? thresholdTokens(price))) advice = 'Small context: do nothing.'
-    else if (isCompactAhead) advice = 'Over the idle-compaction size: keep-warm cannot stop it. Hand off or compact.'
-    else advice = narrow ? `Best: ${pickLabel(plan.recommended)}` : `Best: ${pickLabel(plan.recommended)} (warm wins up to ~${plan.breakEvenHours.toFixed(1)}h)`
-    const legend = basis === 'subscription' ? '~ token-equivalent (plan) · $ at API prices' : '~ token-equivalent · $ at API prices'
+    const rows = panelRows({
+      price,
+      basis,
+      ctx: current.ctx,
+      leftMs: last > 0 ? last + TTL_MS - now : undefined,
+      plan,
+      isCompactAhead,
+      isSmall: current.ctx < (settings.minTokens ?? thresholdTokens(price)),
+      narrow,
+    })
 
     return (
       <Box flexDirection="column">
-        <Text bold>{`${price.id} · ${fmtK(current.ctx)} tokens · cache ${cacheText}${price.isGuess ? ' · price guessed' : ''}`}</Text>
-        <Input
-          key="hours"
-          label="Away (hours)"
-          placeholder={String(DEFAULT_HOURS)}
-          value={typed}
-          submitLabel="warm"
-          onInput={(value: string) => void update($, hoursText, () => value)}
-          onSubmit={(value: string) => {
-            const chosen = parseHours(value)
-            if (chosen === null) $.ui.toast(`Enter hours between 0 and ${MAX_HOURS}`, { timeoutMs: TOAST_MS })
-            else void startWarm($, chosen)
-          }}
-        />
-        {optionRows(plan, !isCold, narrow).map((line, at) => (
-          <Text key={`row-${at}`}>{line}</Text>
+        {rows.map((row, at) => (
+          <Box key={`row-${at}`} flexDirection="row">
+            {row.length === 0 ? (
+              <Text> </Text>
+            ) : (
+              row.map((piece, index) => (
+                <Text key={`piece-${index}`} color={piece.color} bold={piece.bold} dimColor={piece.dim}>
+                  {piece.text}
+                </Text>
+              ))
+            )}
+          </Box>
         ))}
-        {!narrow && <Text dimColor>{lastNote !== '' ? lastNote : legend}</Text>}
-        <Text>{advice}</Text>
+        {!isCold && (
+          <Input
+            key="hours"
+            label="Away (hours)"
+            placeholder={String(DEFAULT_HOURS)}
+            value={typed}
+            submitLabel="warm"
+            onInput={(value: string) => void update($, hoursText, () => value)}
+            onSubmit={(value: string) => {
+              const chosen = parseHours(value)
+              if (chosen === null) $.ui.toast(`Enter hours between 0 and ${MAX_HOURS}`, { timeoutMs: TOAST_MS })
+              else void startWarm($, chosen)
+            }}
+          />
+        )}
+        {parsed === null && <Text color="yellow">{`Hours: 0 to ${MAX_HOURS}`}</Text>}
+        {lastNote !== '' && <Text dimColor>{lastNote}</Text>}
         {warming !== null && (
           <Button
             key="stop"
