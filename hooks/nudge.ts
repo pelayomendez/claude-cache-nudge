@@ -86,7 +86,7 @@ export function folderOf(cwd: string): string {
 }
 
 export type BandButton = 'warm' | 'handoff' | 'stop' | 'more'
-export type BandView = { text: string; color: 'green' | 'yellow' | 'red'; buttons: BandButton[] }
+export type BandView = { text: string; color: 'green' | 'yellow' | 'red'; buttons: BandButton[]; isQuiet?: true }
 
 /** How close to expiry the band turns amber: the nudge's own window. */
 export const AMBER_MS = 10 * MIN
@@ -125,9 +125,11 @@ export function bandView(input: {
   if (lastRequestAt === 0 || ctx < minTokens) return undefined
   const left = lastRequestAt + TTL_MS - now
   if (left <= 0) return fit({ text: `cache cold · next message re-caches ${size}`, color: 'red', buttons: [] })
+  // Far from expiry the band keeps quiet: dim, one button. The actions come out in the last ten minutes.
+  if (left > AMBER_MS) return fit({ text: `cache ${minutesText(left)} left · ${size}`, color: 'green', buttons: ['more'], isQuiet: true })
   return fit({
     text: `cache ${minutesText(left)} left · ${size}`,
-    color: left <= AMBER_MS ? 'yellow' : 'green',
+    color: 'yellow',
     buttons: isCompactAhead ? ['handoff', 'more'] : ['warm', 'handoff', 'more'],
   })
 }
