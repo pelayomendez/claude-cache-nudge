@@ -21,6 +21,10 @@ declare module 'claude-code' {
       warm: Warm | null
       snap: Snap
       note: string
+      /** When keep-warm ends with you still away, compact while the cache is warm. Per session. */
+      compactAfter: boolean
+      /** When the main conversation last ran a turn: your activity, as opposed to a ping. */
+      lastTurnAt: number
     }
   }
 }

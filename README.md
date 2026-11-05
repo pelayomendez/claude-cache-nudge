@@ -34,19 +34,28 @@ opus-5-5 · 120k tokens
 
 Next message now: ~6k $0.02 · once cold: ~240k $0.96
 
-Away for 4h:
-▸ Keep warm    4 pings   ~24k    $0.10  cheapest
+Away for 4h (change the hours below)
+▸ Keep warm    4 pings   ~24k    $0.10  ◂ cheapest
   Compact now            ~85k    $0.34
   Do nothing             ~234k   $0.94
 
 Keep-warm stays cheaper than compacting for up to ~11.8h away.
 ```
 
-Change the hours and the costs follow.
+Change the hours and the costs follow. Under it, the actions as a menu, each with a key:
+
+```
+w: Keep warm 4h        a tiny hidden request every 50 min while you are away  ◂ cheapest
+t: Then compact: off   when keep-warm ends and you are still away
+p: Ping once           one more hour of cache, now
+f: Write handoff       a file to /clear from when you are back
+c: Compact now         summarise the conversation while the cache is warm
+```
 
 | Option | What it does |
 | --- | --- |
 | **Keep warm** (`[warm]` on the band: 4 hours) | A tiny hidden request every 50 minutes, read from the cache, which restarts its hour. Never shown in the conversation; it does not grow it. Stops at the hours you set, or with `/nudge off`. |
+| **Then compact if I'm still away** | A toggle for keep-warm, off by default, per session. When keep-warm ends and you have not typed since its last ping, it compacts while the cache is still warm, so coming back costs only the summary. The band reads `warm 1h40m · 120k · then compact`. |
 | **Ping once** | One such request: about an hour more. |
 | **Write handoff** | Asks the session, in a visible turn and while the cache is warm, to write a handoff you can `/clear` from. |
 | **Compact now** | Claude Code's own `/compact`. |
@@ -64,6 +73,7 @@ Environment variables, read when a session starts:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `CACHE_NUDGE_REMIND_MIN` | `50` | Minutes idle before the nudge, 10 to 58 |
+| `CACHE_NUDGE_COMPACT_AFTER_WARM` | off | `1` turns the then-compact toggle on in every new session |
 | `CACHE_NUDGE_MIN_TOKENS` | the model's threshold | Nudge only from this context size |
 
 ## Install

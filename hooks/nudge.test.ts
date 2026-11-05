@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { MIN, priceOf } from './model.ts'
-import { HANDOFF_PROMPT, bandView, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
+import { HANDOFF_PROMPT, bandView, shouldCompactAtEnd, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 
 const OPUS = priceOf('claude-opus-5-5')
 const HOUR_CACHE = settingsFrom({})
@@ -158,5 +158,31 @@ test('the panel draws its bar, costs and controls', async ($, on) => {
   await seen.clock.advance(18 * MIN)
   const pane = await $.ui.mount({ plugin: 'cache-nudge', surface: 'terminal', component: 'Pane', requestId: 'cache-nudge', props: { bodyColumns: 80, bodyRows: 20 } } as never)
   const drawn = JSON.stringify(await pane.drawn())
-  for (const text of ['42m left', 'Next message ', 'Away for 4h:', 'cheapest', '"label":"Keep warm 4h"', '"label":"Write handoff"']) expect(drawn).toContain(text)
+  for (const text of ['42m left', 'Next message ', 'Away for ', 'cheapest', 'Keep warm 4h', 'Write handoff', '"hotkey":"w"']) expect(drawn).toContain(text)
+})
+
+test('compact after keep-warm: only with the toggle on, you still away, the cache warm and the conversation worth it', () => {
+  const base = { isOn: true, now: 300 * MIN, lastTurnAt: 10 * MIN, warmStartedAt: 11 * MIN, lastPingAt: 270 * MIN, lastRequestAt: 270 * MIN, ctx: 120_000, minTokens: 38_462 }
+  expect(shouldCompactAtEnd(base)).toBe(true)
+  expect(shouldCompactAtEnd({ ...base, isOn: false })).toBe(false)
+  expect(shouldCompactAtEnd({ ...base, lastTurnAt: 280 * MIN })).toBe(false)
+  expect(shouldCompactAtEnd({ ...base, lastPingAt: undefined, lastTurnAt: 5 * MIN })).toBe(true)
+  expect(shouldCompactAtEnd({ ...base, now: 330 * MIN })).toBe(false)
+  expect(shouldCompactAtEnd({ ...base, ctx: 20_000 })).toBe(false)
+})
+
+test('with the toggle on, keep-warm ends in a compaction when you never came back', async ($, on) => {
+  mock.env(on, { CACHE_NUDGE_COMPACT_AFTER_WARM: '1' })
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  const compacts: string[] = []
+  on('command.run', { command: 'compact' }, ($$, e) => (compacts.push(e.command), { text: '' }) as never)
+  const seen = engine(on, 120_000)
+  await $.session.start(START)
+  await request($)
+  await seen.clock.advance(MIN)
+  await $.command.run(typed('2') as never)
+  const band = JSON.stringify(await (await $.ui.mount({ plugin: 'cache-nudge', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS } as never)).drawn())
+  expect(band).toContain('then compact')
+  await seen.clock.advance(2 * 60 * MIN + MIN)
+  expect(compacts).toEqual(['compact'])
 })
