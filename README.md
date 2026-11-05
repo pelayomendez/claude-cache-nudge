@@ -10,13 +10,19 @@ Most of the time that is fine. When you are about to step away from a large sess
 
 ## What it does
 
-**A band above the prompt** shows the cache's countdown and the conversation's size, with the actions that still make sense:
+**A band above the prompt, on the right,** shows the cache's countdown and the conversation's size. Far from expiry it stays quiet, dim with one button:
 
 ```
-cache 42m left · 120k                              [warm] [handoff] [more]
+                                                   cache 42m left · 120k [more]
 ```
 
-Green while warm, amber in the last ten minutes, red once cold (`cache cold · next message re-caches 120k`). While keep-warm runs it reads `warm 3h12m · 120k [stop] [more]`. It stays hidden while the conversation is too small for a lapse to matter: about 38k tokens on Opus 5.5, 79k on Sonnet 5.5, where letting it go cold costs about $0.30. Narrow panes keep only `[more]`, then only the countdown.
+In the last ten minutes it turns amber and brings out the actions:
+
+```
+                                       cache 8m left · 120k [warm] [handoff] [more]
+```
+
+Red once cold (`cache cold · next message re-caches 120k`). While keep-warm runs it reads `warm 3h12m · 120k [stop] [more]`. It stays hidden while the conversation is too small for a lapse to matter: about 38k tokens on Opus 5.5, 79k on Sonnet 5.5, where letting it go cold costs about $0.30. Narrow panes keep only `[more]`, then only the countdown.
 
 **At minute 50 of idle,** with the cache still warm, it also nudges you once: a system notification, through the channel Claude Code uses for its own, and inside [herdr](https://herdr.dev) a herdr notification as well. Nothing else runs on its own.
 

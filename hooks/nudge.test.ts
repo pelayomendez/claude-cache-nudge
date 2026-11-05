@@ -98,15 +98,15 @@ test('in herdr, an idle large session is nudged once: the band, a system notific
 
 test('the band: green countdown, amber in the last ten minutes, red when cold, hidden when small', () => {
   const base = { now: 18 * MIN, lastRequestAt: 0.0001, ctx: 120_000, minTokens: 38_462, isCompactAhead: false, columns: 100 }
-  expect(bandView(base)).toEqual({ text: 'cache 42m left · 120k', color: 'green', buttons: ['warm', 'handoff', 'more'] })
-  expect(bandView({ ...base, now: 52 * MIN })?.color).toBe('yellow')
+  expect(bandView(base)).toEqual({ text: 'cache 42m left · 120k', color: 'green', buttons: ['more'], isQuiet: true })
+  expect(bandView({ ...base, now: 52 * MIN })).toEqual({ text: 'cache 8m left · 120k', color: 'yellow', buttons: ['warm', 'handoff', 'more'] })
   expect(bandView({ ...base, now: 61 * MIN })).toEqual({ text: 'cache cold · next message re-caches 120k', color: 'red', buttons: [] })
   expect(bandView({ ...base, ctx: 20_000 })).toBeUndefined()
   expect(bandView({ ...base, lastRequestAt: 0 })).toBeUndefined()
-  expect(bandView({ ...base, isCompactAhead: true })?.buttons).toEqual(['handoff', 'more'])
+  expect(bandView({ ...base, now: 52 * MIN, isCompactAhead: true })?.buttons).toEqual(['handoff', 'more'])
   expect(bandView({ ...base, warmDeadline: 18 * MIN + 192 * MIN })).toEqual({ text: 'warm 3h12m · 120k', color: 'green', buttons: ['stop', 'more'] })
   expect(bandView({ ...base, columns: 40 })?.buttons).toEqual(['more'])
-  expect(bandView({ ...base, columns: 24 })).toEqual({ text: 'cache 42m left', color: 'green', buttons: [] })
+  expect(bandView({ ...base, columns: 24 })).toEqual({ text: 'cache 42m left', color: 'green', buttons: [], isQuiet: true })
 })
 
 test('idle compaction needs its own row, auto-compact, and no DISABLE_AUTO_COMPACT', () => {
