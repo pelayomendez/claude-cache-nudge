@@ -408,8 +408,10 @@ export const register: Register = on => {
       more: { label: 'more', press: () => void openPanel($) },
     } as const
     const mine = (
-      <Box key="cache-nudge" flexDirection="row">
-        <Text color={view.color}>{view.text}</Text>
+      <Box key="cache-nudge" flexDirection="row" justifyContent="flex-end">
+        <Text color={view.color} dimColor={view.isQuiet}>
+          {view.text}
+        </Text>
         {view.buttons.map(name => (
           <Box key={name} flexDirection="row">
             <Text> </Text>
