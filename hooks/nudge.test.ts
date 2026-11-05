@@ -158,7 +158,7 @@ test('the panel draws its bar, costs and controls', async ($, on) => {
   await seen.clock.advance(18 * MIN)
   const pane = await $.ui.mount({ plugin: 'cache-nudge', surface: 'terminal', component: 'Pane', requestId: 'cache-nudge', props: { bodyColumns: 80, bodyRows: 20 } } as never)
   const drawn = JSON.stringify(await pane.drawn())
-  for (const text of ['42m left', 'Next message ', 'Away for ', 'cheapest', '"label":"Keep warm 4h"', '"label":"Write handoff"']) expect(drawn).toContain(text)
+  for (const text of ['42m left', 'Next message ', 'Away for ', 'cheapest', 'Keep warm 4h', 'Write handoff', '"hotkey":"w"']) expect(drawn).toContain(text)
 })
 
 test('compact after keep-warm: only with the toggle on, you still away, the cache warm and the conversation worth it', () => {

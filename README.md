@@ -42,7 +42,15 @@ Away for 4h (change the hours below)
 Keep-warm stays cheaper than compacting for up to ~11.8h away.
 ```
 
-Change the hours and the costs follow.
+Change the hours and the costs follow. Under it, the actions as a menu, each with a key:
+
+```
+w: Keep warm 4h        a tiny hidden request every 50 min while you are away  ◂ cheapest
+t: Then compact: off   when keep-warm ends and you are still away
+p: Ping once           one more hour of cache, now
+f: Write handoff       a file to /clear from when you are back
+c: Compact now         summarise the conversation while the cache is warm
+```
 
 | Option | What it does |
 | --- | --- |
