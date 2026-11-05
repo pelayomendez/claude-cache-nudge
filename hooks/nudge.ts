@@ -84,3 +84,56 @@ export function herdrNotifyArgv(bin: string, title: string, body: string): strin
 export function folderOf(cwd: string): string {
   return cwd.split('/').filter(Boolean).pop() ?? cwd
 }
+
+export type BandButton = 'warm' | 'handoff' | 'stop' | 'more'
+export type BandView = { text: string; color: 'green' | 'yellow' | 'red'; buttons: BandButton[] }
+
+/** How close to expiry the band turns amber: the nudge's own window. */
+export const AMBER_MS = 10 * MIN
+
+function minutesText(ms: number): string {
+  const total = Math.max(0, Math.round(ms / MIN))
+  return total >= 60 ? `${Math.floor(total / 60)}h${String(total % 60).padStart(2, '0')}m` : `${total}m`
+}
+
+function tokensText(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+}
+
+/**
+ * The band above the prompt: the cache's countdown and the conversation's size, coloured green,
+ * amber in the last ten minutes and red once cold, with the actions that still make sense.
+ * Undefined, nothing drawn, before the first request and while the conversation is too small for
+ * a lapse to matter (unless keep-warm runs).
+ */
+export function bandView(input: {
+  now: number
+  lastRequestAt: number
+  ctx: number
+  minTokens: number
+  warmDeadline?: number
+  isCompactAhead: boolean
+  columns: number
+}): BandView | undefined {
+  const { now, lastRequestAt, ctx, minTokens, warmDeadline, isCompactAhead, columns } = input
+  const size = tokensText(ctx)
+  const fit = (view: BandView): BandView =>
+    columns < 30 ? { ...view, text: view.text.split(' · ')[0] ?? view.text, buttons: [] } : columns < 56 ? { ...view, buttons: view.buttons.filter(one => one === 'more' || one === 'stop') } : view
+  if (warmDeadline !== undefined && now < warmDeadline) {
+    return fit({ text: `warm ${minutesText(warmDeadline - now)} · ${size}`, color: 'green', buttons: ['stop', 'more'] })
+  }
+  if (lastRequestAt === 0 || ctx < minTokens) return undefined
+  const left = lastRequestAt + TTL_MS - now
+  if (left <= 0) return fit({ text: `cache cold · next message re-caches ${size}`, color: 'red', buttons: [] })
+  return fit({
+    text: `cache ${minutesText(left)} left · ${size}`,
+    color: left <= AMBER_MS ? 'yellow' : 'green',
+    buttons: isCompactAhead ? ['handoff', 'more'] : ['warm', 'handoff', 'more'],
+  })
+}
+
+/** Whether Claude Code's idle compaction can run: its own row, and auto-compact, both on. */
+export function idleCompactionOn(rows: { idleCompaction?: unknown; autoCompactEnabled?: unknown }, env: { DISABLE_AUTO_COMPACT?: string }): boolean {
+  if (env.DISABLE_AUTO_COMPACT === '1' || env.DISABLE_AUTO_COMPACT === 'true') return false
+  return rows.idleCompaction !== false && rows.autoCompactEnabled !== false
+}

@@ -17,7 +17,6 @@ declare module 'claude-code' {
       nowAt: number
       lastRequestAt: number
       nudgedFor: number
-      isNudging: boolean
       hoursText: string
       warm: Warm | null
       snap: Snap

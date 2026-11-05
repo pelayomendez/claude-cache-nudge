@@ -10,28 +10,28 @@ Most of the time that is fine. When you are about to step away from a large sess
 
 ## What it does
 
-**Normally:** nothing on screen, nothing spent.
+**A band above the prompt** shows the cache's countdown and the conversation's size, with the actions that still make sense:
 
-**After 50 idle minutes,** with the cache still warm and the conversation large enough that a lapse costs at least about $0.30 (about 38k tokens on Opus 5.5, 79k on Sonnet 5.5):
+```
+cache 42m left · 120k                              [warm] [handoff] [more]
+```
 
-- one line above the prompt: `[ cache cools in 10m ]`
-- a system notification, through the channel Claude Code uses for its own
-- inside [herdr](https://herdr.dev), a herdr notification as well
+Green while warm, amber in the last ten minutes, red once cold (`cache cold · next message re-caches 120k`). While keep-warm runs it reads `warm 3h12m · 120k [stop] [more]`. It stays hidden while the conversation is too small for a lapse to matter: about 38k tokens on Opus 5.5, 79k on Sonnet 5.5, where letting it go cold costs about $0.30. Narrow panes keep only `[more]`, then only the countdown.
 
-Once per idle stretch. Ignore it and nothing happens.
+**At minute 50 of idle,** with the cache still warm, it also nudges you once: a system notification, through the channel Claude Code uses for its own, and inside [herdr](https://herdr.dev) a herdr notification as well. Nothing else runs on its own.
 
-**Click the line, or type `/nudge`,** for the panel: how long you will be away, what each option would cost, and the cheapest one.
+**`[more]`, or `/nudge`,** opens the panel: how long you will be away, what each option would cost, and the cheapest one.
 
 | Option | What it does |
 | --- | --- |
-| **Keep warm** | A tiny hidden request every 50 minutes, read from the cache, which restarts its hour. Never shown in the conversation; it does not grow it. Stops at the hours you set, or with `/nudge off`. |
+| **Keep warm** (`[warm]` on the band: 4 hours) | A tiny hidden request every 50 minutes, read from the cache, which restarts its hour. Never shown in the conversation; it does not grow it. Stops at the hours you set, or with `/nudge off`. |
 | **Ping once** | One such request: about an hour more. |
 | **Write handoff** | Asks the session, in a visible turn and while the cache is warm, to write a handoff you can `/clear` from. |
 | **Compact now** | Claude Code's own `/compact`. |
 
 Keep-warm is usually the cheapest for absences of a few hours: each ping reads the conversation at the cache price, while letting it go cold rewrites all of it.
 
-**Claude Code's idle compaction comes first on very large conversations.** From 200k tokens (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`) on a one-hour cache, Claude Code compacts an idle conversation by itself at minute 54, and a keep-warm ping does not postpone it. Above that size the panel offers a handoff or a compaction instead of keep-warm, unless idle compaction is off in `/config`.
+**Claude Code's idle compaction comes first on very large conversations.** From 200k tokens (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`) on a one-hour cache, Claude Code compacts an idle conversation by itself at minute 54, and a keep-warm ping does not postpone it. Above that size the band and the panel offer a handoff or a compaction instead of keep-warm, unless idle compaction or auto-compact is off.
 
 A five-minute cache gets no nudge: it would fire at every pause.
 

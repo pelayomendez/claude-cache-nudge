@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { MIN, priceOf } from './model.ts'
-import { HANDOFF_PROMPT, folderOf, herdrNotifyArgv, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
+import { HANDOFF_PROMPT, bandView, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 
 const OPUS = priceOf('claude-opus-5-5')
 const HOUR_CACHE = settingsFrom({})
@@ -65,6 +65,7 @@ function engine(on: On, ctx: number) {
   on('prompt.submit', ($, e) => (prompts.push(e.text), { text: e.text }) as never)
   on('ui.open', () => ({ value: { isPlaced: true } }) as never)
   on('ui.close', () => ({ value: undefined }) as never)
+  on('config.list', () => ({ value: [] }) as never)
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => h($.ui.resolve(e).Box, {}) as never)
   return { clock, notices, runs, prompts }
 }
@@ -85,7 +86,28 @@ test('in herdr, an idle large session is nudged once: the band, a system notific
   expect(seen.notices).toEqual(['api · 120k tokens'])
   expect(seen.runs).toEqual([['/opt/herdr', 'notification', 'show', 'Cache cools in 10m', '--body=api · 120k tokens', '--sound', 'done']])
   const band = await $.ui.mount({ plugin: 'cache-nudge', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 3, bodyColumns: 100, scroll: { offset: 0, bodyRows: 3 }, view: {} } } as never)
-  expect(JSON.stringify(await band.drawn())).toContain('cache cools in')
+  const drawn = JSON.stringify(await band.drawn())
+  for (const text of ['cache 10m left · 120k', 'yellow', '"label":"warm"', '"label":"handoff"', '"label":"more"']) expect(drawn).toContain(text)
   await seen.clock.advance(30 * MIN)
   expect(seen.notices).toHaveLength(1)
+})
+
+test('the band: green countdown, amber in the last ten minutes, red when cold, hidden when small', () => {
+  const base = { now: 18 * MIN, lastRequestAt: 0.0001, ctx: 120_000, minTokens: 38_462, isCompactAhead: false, columns: 100 }
+  expect(bandView(base)).toEqual({ text: 'cache 42m left · 120k', color: 'green', buttons: ['warm', 'handoff', 'more'] })
+  expect(bandView({ ...base, now: 52 * MIN })?.color).toBe('yellow')
+  expect(bandView({ ...base, now: 61 * MIN })).toEqual({ text: 'cache cold · next message re-caches 120k', color: 'red', buttons: [] })
+  expect(bandView({ ...base, ctx: 20_000 })).toBeUndefined()
+  expect(bandView({ ...base, lastRequestAt: 0 })).toBeUndefined()
+  expect(bandView({ ...base, isCompactAhead: true })?.buttons).toEqual(['handoff', 'more'])
+  expect(bandView({ ...base, warmDeadline: 18 * MIN + 192 * MIN })).toEqual({ text: 'warm 3h12m · 120k', color: 'green', buttons: ['stop', 'more'] })
+  expect(bandView({ ...base, columns: 40 })?.buttons).toEqual(['more'])
+  expect(bandView({ ...base, columns: 24 })).toEqual({ text: 'cache 42m left', color: 'green', buttons: [] })
+})
+
+test('idle compaction needs its own row, auto-compact, and no DISABLE_AUTO_COMPACT', () => {
+  expect(idleCompactionOn({}, {})).toBe(true)
+  expect(idleCompactionOn({ idleCompaction: false }, {})).toBe(false)
+  expect(idleCompactionOn({ autoCompactEnabled: false }, {})).toBe(false)
+  expect(idleCompactionOn({}, { DISABLE_AUTO_COMPACT: '1' })).toBe(false)
 })

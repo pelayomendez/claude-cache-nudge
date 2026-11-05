@@ -24,7 +24,7 @@ import {
   priceOf,
   thresholdTokens,
 } from './model.ts'
-import { HANDOFF_PROMPT, folderOf, herdrNotifyArgv, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
+import { HANDOFF_PROMPT, bandView, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 import type { Settings } from './nudge.ts'
 
 const PANE = 'cache-nudge'
@@ -37,7 +37,6 @@ const EMPTY_SNAP: Snap = { ctx: 0, model: '', hasLimits: false }
 const nowAt = atom({ plugin: 'cache-nudge', key: 'nowAt' } as const, 0)
 const lastRequestAt = atom({ plugin: 'cache-nudge', key: 'lastRequestAt' } as const, 0)
 const nudgedFor = atom({ plugin: 'cache-nudge', key: 'nudgedFor' } as const, 0)
-const isNudging = atom({ plugin: 'cache-nudge', key: 'isNudging' } as const, false)
 const hoursText = atom({ plugin: 'cache-nudge', key: 'hoursText' } as const, '')
 const warm = atom({ plugin: 'cache-nudge', key: 'warm' } as const, null)
 const snap = atom({ plugin: 'cache-nudge', key: 'snap' } as const, EMPTY_SNAP)
@@ -54,11 +53,15 @@ async function refreshSnap($: EngineInterface): Promise<void> {
   await update($, snap, () => next)
 }
 
-/** Whether Claude Code's own idle compaction is on (the /config row; on when it cannot be read). */
+/** Whether Claude Code's own idle compaction can run: its /config rows and DISABLE_AUTO_COMPACT. */
 async function isIdleCompactionOn($: EngineInterface): Promise<boolean> {
   try {
-    const row = (await $.config.list()).find(each => each.key === 'idleCompaction')
-    return row?.value !== false
+    const rows = await $.config.list()
+    const value = (key: string) => rows.find(each => each.key === key)?.value
+    return idleCompactionOn(
+      { idleCompaction: value('idleCompaction'), autoCompactEnabled: value('autoCompactEnabled') },
+      { DISABLE_AUTO_COMPACT: await $.env.get('DISABLE_AUTO_COMPACT') },
+    )
   } catch {
     return true
   }
@@ -99,7 +102,6 @@ async function remindIfDue($: EngineInterface): Promise<void> {
   }
   if (!shouldNudge(input, settings)) return
   await update($, nudgedFor, () => last)
-  await update($, isNudging, () => true)
   const cwd = await $.session.cwd()
   await notify($, `Cache cools in ${fmtDur(last + TTL_MS - now)}`, `${folderOf(cwd)} · ${fmtK(current.ctx)} tokens`)
 }
@@ -132,7 +134,6 @@ async function touch($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
   await update($, nowAt, () => now)
   await update($, lastRequestAt, () => now)
-  await update($, isNudging, () => false)
   armReminder($)
   await armPing($)
 }
@@ -216,7 +217,6 @@ async function startWarm($: EngineInterface, hours: number): Promise<void> {
     return
   }
   await update($, warm, () => ({ startedAt: now, deadline: now + hours * HOUR, pings: 0, misses: 0, last: null }))
-  await update($, isNudging, () => false)
   await armPing($)
   $.ui.toast(`Keep-warm on for ${fmtHours(hours)}`, { timeoutMs: 3000 })
   await $.ui.close({ id: PANE })
@@ -251,10 +251,10 @@ async function writeHandoff($: EngineInterface): Promise<void> {
 async function tick($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
   await update($, nowAt, () => now)
+  await refreshSnap($)
   const current = await read($, warm)
   if (current !== null && now >= current.deadline) await endWarm($, 'expired')
   const last = await read($, lastRequestAt)
-  if ((await read($, isNudging)) && last > 0 && now - last >= TTL_MS) await update($, isNudging, () => false)
 }
 
 function stopTimers(): void {
@@ -290,7 +290,6 @@ export const register: Register = on => {
     stopTimers()
     await update($, warm, () => null)
     await update($, lastRequestAt, () => 0)
-    await update($, isNudging, () => false)
     await refreshSnap($)
     return next(e)
   })
@@ -314,7 +313,6 @@ export const register: Register = on => {
       stopTimers()
       await update($, warm, () => null)
       await update($, lastRequestAt, () => 0)
-      await update($, isNudging, () => false)
     }
     return result
   })
@@ -336,20 +334,41 @@ export const register: Register = on => {
     return {}
   })
 
-  // The nudge, or the keep-warm countdown: one line above the prompt, nothing the rest of the time.
+  // The band: the cache's countdown and the conversation's size, with the actions that still make
+  // sense. Drawn once the conversation is big enough for a lapse to matter, or while keep-warm runs.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const current = await read($, warm)
-    const now = await read($, nowAt)
-    const last = await read($, lastRequestAt)
-    const showNudge = current === null && (await read($, isNudging)) && last > 0 && now - last < TTL_MS
-    if (e.props.hasSurvey || (current === null && !showNudge)) return next(e)
-
+    if (e.props.hasSurvey) return next(e)
+    const current = await read($, snap)
+    const warming = await read($, warm)
+    const view = bandView({
+      now: await read($, nowAt),
+      lastRequestAt: await read($, lastRequestAt),
+      ctx: current.ctx,
+      minTokens: settings.minTokens ?? thresholdTokens(priceOf(current.model)),
+      warmDeadline: warming?.deadline,
+      isCompactAhead: isIdleCompactAhead(current.ctx, settings, await isIdleCompactionOn($)),
+      columns: e.props.bodyColumns,
+    })
+    if (!view) return next(e)
     const below = await next(e)
-    const { Box, Button } = $.ui.resolve(e)
-    const short = e.props.bodyColumns < 40
-    const left = fmtDur(last + TTL_MS - now)
-    const label = current !== null ? `warm ${fmtDur(current.deadline - now)}` : short ? `cache ${left}` : `cache cools in ${left}`
-    const mine = <Button key="open" label={label} onPress={() => void openPanel($)} />
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const actions = {
+      warm: { label: 'warm', press: () => void startWarm($, DEFAULT_HOURS) },
+      handoff: { label: 'handoff', press: () => void writeHandoff($) },
+      stop: { label: 'stop', press: () => void endWarm($, 'stopped') },
+      more: { label: 'more', press: () => void openPanel($) },
+    } as const
+    const mine = (
+      <Box key="cache-nudge" flexDirection="row">
+        <Text color={view.color}>{view.text}</Text>
+        {view.buttons.map(name => (
+          <Box key={name} flexDirection="row">
+            <Text> </Text>
+            <Button key={name} label={actions[name].label} onPress={actions[name].press} />
+          </Box>
+        ))}
+      </Box>
+    )
     return below ? (
       <Box flexDirection="column">
         {mine}
