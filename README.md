@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" width="160" alt=""></p>
+
 # claude-cache-nudge
 
 A Claude Code plugin (`cache-nudge`) that nudges you once before an idle session's prompt cache goes cold, then lets you choose what to do about it.
