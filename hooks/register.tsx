@@ -440,7 +440,9 @@ export const register: Register = on => {
     } as const
     const mine = (
       <Box key="cache-nudge" flexDirection="row" justifyContent="flex-end">
-        <Text color={view.color}>{view.text}</Text>
+        <Text color={view.color} wrap="truncate-end">
+          {view.text}
+        </Text>
         {view.buttons.map(name => (
           <Box key={name} flexDirection="row">
             <Text> </Text>
@@ -543,20 +545,31 @@ export const register: Register = on => {
         {parsed === null && <Text color="yellow">{`Hours: 0 to ${MAX_HOURS}`}</Text>}
         {lastNote !== '' && <Text dimColor>{lastNote}</Text>}
         <Text> </Text>
+        <Text dimColor>{'─'.repeat(Math.max(10, Math.min(60, e.props.bodyColumns - 2)))}</Text>
+        <Text bold color="cyan">
+          What you can do
+        </Text>
         {actions.map(action => (
-          <Button
-            key={action.id}
-            plain
-            hotkey={action.hotkey}
-            autoFocus={action.isBest || (action.id === 'stop' || action.id === 'close') ? true : undefined}
-            onPress={() => press(action.id)}
-          >
-            <Text color={action.color} bold={action.isBest}>
-              {narrow ? action.label : action.label.padEnd(20)}
-            </Text>
-            {!narrow && <Text dimColor>{action.hint}</Text>}
-            {action.isBest && !narrow && <Text color="green">  ◂ cheapest</Text>}
-          </Button>
+          // The button on its own line, then what it does, indented and dim, then a gap.
+          <Box key={action.id} flexDirection="column" marginTop={1}>
+            <Button
+              key={action.id}
+              plain
+              hotkey={action.hotkey}
+              autoFocus={action.isBest || (action.id === 'stop' || action.id === 'close') ? true : undefined}
+              onPress={() => press(action.id)}
+            >
+              <Text color={action.color} bold>
+                {action.label}
+              </Text>
+              {action.isBest && <Text color="green">  ◂ cheapest</Text>}
+            </Button>
+            <Box paddingLeft={5}>
+              <Text dimColor wrap="wrap">
+                {action.hint}
+              </Text>
+            </Box>
+          </Box>
         ))}
       </Box>
     )

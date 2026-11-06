@@ -44,29 +44,60 @@ Away for 4h (change the hours below)
 Keep-warm stays cheaper than compacting for up to ~11.8h away.
 ```
 
-Change the hours and the costs follow. Under it, the actions as a menu, each with a key:
+Type how long you'll be away in the **Away (hours)** field under it (`1.5` or `1.5h`, up to 24) and the costs follow. Below a line, **What you can do** lists the actions, each with its key and a sentence on what it does:
 
 ```
-w: Keep warm 4h        a tiny hidden request every 50 min while you are away  ◂ cheapest
-t: Then compact: off   when keep-warm ends and you are still away
-p: Ping once           one more hour of cache, now
-f: Write handoff       a file to /clear from when you are back
-c: Compact now         summarise the conversation while the cache is warm
+────────────────────────────────────────────
+What you can do
+
+w: Keep warm 4h  ◂ cheapest
+     Sends a tiny hidden request every 50 minutes for the hours above, so the cache never
+     expires while you are away. It does not add to the conversation.
+
+t: Then compact: off
+     If keep-warm runs out and you still have not typed, compact the conversation while the
+     cache is warm, so coming back only costs the summary.
+
+p: Ping once
+     One hidden request now, which gives the cache one more hour. For a short break.
+
+f: Write handoff
+     Asks Claude to write a handoff file now, while the cache is warm. When you are back,
+     /clear and start from it: it keeps more than a summary.
+
+c: Compact now
+     Runs Claude Code's /compact now, while the cache is warm and summarising is cheapest.
 ```
 
-| Option | What it does |
+Only what still makes sense is listed: while keep-warm runs, **s: Stop keep-warm** replaces Keep warm; above the idle-compaction size (below) keep-warm, Then compact and Ping once are hidden; once the cache is cold the only entry is **q: Close**, as there is nothing left to save.
+
+| Action | Key | What it does |
+| --- | --- | --- |
+| **Keep warm** (`[warm]` on the band: 4 hours) | `w` | A tiny hidden request every 50 minutes, read from the cache, which restarts its hour. Never shown in the conversation; it does not grow it. Stops at the hours you set, with `s`, or with `/nudge off`. |
+| **Stop keep-warm** | `s` | Ends keep-warm; the cache goes cold an hour after the last ping. |
+| **Then compact** | `t` | A toggle for keep-warm, off by default, per session. When keep-warm ends and you have not typed since its last ping, it compacts while the cache is still warm, so coming back costs only the summary. The band reads `warm 1h40m · 120k · then compact`. |
+| **Ping once** | `p` | One such request: about an hour more. |
+| **Write handoff** (`[handoff]` on the band) | `f` | Asks the session, in a visible turn and while the cache is warm, to write a handoff you can `/clear` from. |
+| **Compact now** | `c` | Claude Code's own `/compact`. |
+| **Close** | `q` | Closes the panel. |
+
+### `/nudge`
+
+| Command | What it does |
 | --- | --- |
-| **Keep warm** (`[warm]` on the band: 4 hours) | A tiny hidden request every 50 minutes, read from the cache, which restarts its hour. Never shown in the conversation; it does not grow it. Stops at the hours you set, or with `/nudge off`. |
-| **Then compact if I'm still away** | A toggle for keep-warm, off by default, per session. When keep-warm ends and you have not typed since its last ping, it compacts while the cache is still warm, so coming back costs only the summary. The band reads `warm 1h40m · 120k · then compact`. |
-| **Ping once** | One such request: about an hour more. |
-| **Write handoff** | Asks the session, in a visible turn and while the cache is warm, to write a handoff you can `/clear` from. |
-| **Compact now** | Claude Code's own `/compact`. |
+| `/nudge` | Opens the panel |
+| `/nudge 3` or `/nudge 1.5h` | Starts keep-warm for that many hours |
+| `/nudge off` | Stops keep-warm |
 
 Keep-warm is usually the cheapest for absences of a few hours: each ping reads the conversation at the cache price, while letting it go cold rewrites all of it.
 
 **Claude Code's idle compaction comes first on very large conversations.** From 200k tokens (`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`) on a one-hour cache, Claude Code compacts an idle conversation by itself at minute 54, and a keep-warm ping does not postpone it. Above that size the band and the panel offer a handoff or a compaction instead of keep-warm, unless idle compaction or auto-compact is off.
 
 A five-minute cache gets no nudge: it would fire at every pause.
+
+## What it sends
+
+Everything runs inside Claude Code; the plugin has no server and sends nothing anywhere else. The only model requests it makes are the keep-warm pings: a hidden one-word request on your session's own model and account, reusing the conversation's cache, each costing about a tenth of the conversation in input. It starts them only when you choose keep-warm or ping once. Write handoff and Compact now run as ordinary turns you can see. The notification at minute 50 goes through Claude Code's own notification channel, and inside herdr through `herdr notify`.
 
 ## Settings
 
@@ -95,6 +126,8 @@ Every session: add the folder to `CLAUDE_CODE_PLUGIN_DIRS` in the `env` of `~/.c
 ```
 
 Requires Claude Code 2.1.287 or newer (plugin hooks modules).
+
+Uninstall with `/plugin uninstall cache-nudge@pelayomendez-cache-nudge`, or remove the folder from `CLAUDE_CODE_PLUGIN_DIRS`.
 
 ## Develop
 
