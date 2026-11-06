@@ -1,5 +1,7 @@
 # claude-cache-nudge
 
+[Website](https://pelayomendez.github.io/claude-cache-nudge/) · [Changelog](CHANGELOG.md)
+
 A Claude Code plugin (`cache-nudge`) that nudges you once before an idle session's prompt cache goes cold, then lets you choose what to do about it.
 
 ## Why
@@ -97,9 +99,11 @@ Requires Claude Code 2.1.287 or newer (plugin hooks modules).
 ## Develop
 
 ```bash
-claude plugin validate .
+claude plugin validate --strict .
 claude plugin test .
 ```
+
+CI runs both on every pull request. To release: bump `version` in `.claude-plugin/plugin.json`, move the Unreleased notes in `CHANGELOG.md` under it, merge, then `claude plugin tag --push` on main. Installs only update when the version changes.
 
 ## Credits
 

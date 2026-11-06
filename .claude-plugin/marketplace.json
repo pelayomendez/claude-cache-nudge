@@ -1,13 +1,16 @@
 {
   "name": "pelayomendez-cache-nudge",
   "owner": {
-    "name": "Pelayo Méndez"
+    "name": "Pelayo Méndez",
+    "url": "https://github.com/pelayomendez"
   },
   "plugins": [
     {
       "name": "cache-nudge",
       "source": "./",
-      "description": "A nudge before an idle session's prompt cache goes cold"
+      "description": "A nudge before an idle session's prompt cache goes cold",
+      "homepage": "https://pelayomendez.github.io/claude-cache-nudge/",
+      "category": "productivity"
     }
   ],
   "description": "cache-nudge: a nudge before an idle Claude Code session's prompt cache goes cold"
