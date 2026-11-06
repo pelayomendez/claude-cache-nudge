@@ -106,8 +106,8 @@ export type ActionId = 'stop' | 'warm' | 'then-compact' | 'once' | 'handoff' | '
 export type Action = { id: ActionId; hotkey: string; label: string; hint: string; color?: string; isBest?: true }
 
 /**
- * The panel's actions as a menu: a hotkey, a label in its option's colour, and one dim line saying
- * what it does. Only what still makes sense is listed; the cheapest option is marked.
+ * The panel's actions as a menu: a hotkey, a label in its option's colour, and a dim sentence under
+ * it saying what it does. Only what still makes sense is listed; the cheapest option is marked.
  */
 // No hotkey is a digit or h: the hours field takes "1.5h".
 export function panelActions(input: {
@@ -120,19 +120,19 @@ export function panelActions(input: {
   isCompactAfter: boolean
 }): Action[] {
   const { isCold, isCompactAhead, isSmall, hours, recommended, warming, isCompactAfter } = input
-  if (isCold) return [{ id: 'close', hotkey: 'q', label: 'Close', hint: 'the cache is cold: just send' }]
+  if (isCold) return [{ id: 'close', hotkey: 'q', label: 'Close', hint: 'The cache is already cold, so there is nothing left to save. Just send your next message.' }]
   const best = (pick: Pick) => (!isSmall && recommended === pick ? ({ isBest: true } as const) : {})
   const actions: Action[] = []
   if (warming) {
-    actions.push({ id: 'stop', hotkey: 's', label: 'Stop keep-warm', hint: `${fmtDur(warming.leftMs)} left, ${warming.pings} ping${warming.pings === 1 ? '' : 's'} so far`, color: 'green' })
+    actions.push({ id: 'stop', hotkey: 's', label: 'Stop keep-warm', hint: `Keep-warm runs for ${fmtDur(warming.leftMs)} more (${warming.pings} ping${warming.pings === 1 ? '' : 's'} so far). Stop it and the cache goes cold an hour after the last ping.`, color: 'green' })
   } else if (!isCompactAhead) {
-    actions.push({ id: 'warm', hotkey: 'w', label: `Keep warm ${fmtHours(hours)}`, hint: 'a tiny hidden request every 50 min while you are away', color: 'green', ...best('warm') })
+    actions.push({ id: 'warm', hotkey: 'w', label: `Keep warm ${fmtHours(hours)}`, hint: 'Sends a tiny hidden request every 50 minutes for the hours above, so the cache never expires while you are away. It does not add to the conversation.', color: 'green', ...best('warm') })
   }
   if (!isCompactAhead) {
-    actions.push({ id: 'then-compact', hotkey: 't', label: `Then compact: ${isCompactAfter ? 'on' : 'off'}`, hint: 'when keep-warm ends and you are still away', color: isCompactAfter ? 'green' : undefined })
-    actions.push({ id: 'once', hotkey: 'p', label: 'Ping once', hint: 'one more hour of cache, now' })
+    actions.push({ id: 'then-compact', hotkey: 't', label: `Then compact: ${isCompactAfter ? 'on' : 'off'}`, hint: 'If keep-warm runs out and you still have not typed, compact the conversation while the cache is warm, so coming back only costs the summary.', color: isCompactAfter ? 'green' : undefined })
+    actions.push({ id: 'once', hotkey: 'p', label: 'Ping once', hint: 'One hidden request now, which gives the cache one more hour. For a short break.' })
   }
-  actions.push({ id: 'handoff', hotkey: 'f', label: 'Write handoff', hint: 'a file to /clear from when you are back', color: 'cyan' })
-  actions.push({ id: 'compact', hotkey: 'c', label: 'Compact now', hint: 'summarise the conversation while the cache is warm', color: 'magenta', ...best('compact') })
+  actions.push({ id: 'handoff', hotkey: 'f', label: 'Write handoff', hint: 'Asks Claude to write a handoff file now, while the cache is warm. When you are back, /clear and start from it: it keeps more than a summary.', color: 'cyan' })
+  actions.push({ id: 'compact', hotkey: 'c', label: 'Compact now', hint: "Runs Claude Code's /compact now, while the cache is warm and summarising is cheapest. The conversation shrinks to a summary.", color: 'magenta', ...best('compact') })
   return actions
 }
