@@ -6,6 +6,19 @@
     "name": "Pelayo Méndez",
     "url": "https://github.com/pelayomendez"
   },
+  "homepage": "https://pelayomendez.github.io/claude-cache-nudge/",
+  "repository": "https://github.com/pelayomendez/claude-cache-nudge",
   "license": "MIT",
+  "keywords": [
+    "prompt-cache",
+    "cache",
+    "cost",
+    "tokens",
+    "keep-warm",
+    "compact",
+    "handoff",
+    "idle"
+  ],
+  "icon": "./.claude-plugin/icon.png",
   "types": "./types/index.d.ts"
 }

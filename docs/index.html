@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>cache-nudge · a Claude Code plugin</title>
+  <meta name="description" content="A nudge before an idle Claude Code session's prompt cache goes cold, then your choice: keep it warm, ping once, write a handoff, or compact.">
+  <link rel="icon" href="icon.png">
+  <meta property="og:title" content="cache-nudge">
+  <meta property="og:description" content="A nudge before an idle Claude Code session's prompt cache goes cold.">
+  <meta property="og:image" content="https://pelayomendez.github.io/claude-cache-nudge/icon.png">
+  <style>
+    :root { --ink: #1E1E2A; --cream: #FFF4E0; --accent: #F2A541; --dim: #a9a6b8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--ink); color: var(--cream); font: 17px/1.6 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
+    header { text-align: center; }
+    header img { width: 168px; height: 168px; }
+    h1 { font-size: 44px; margin: 12px 0 4px; letter-spacing: -0.5px; }
+    .tag { color: var(--dim); font-size: 19px; margin: 0 auto; max-width: 560px; }
+    h2 { color: var(--accent); font-size: 20px; margin: 44px 0 10px; }
+    pre { background: #12121a; border: 1px solid #2c2c3c; border-radius: 10px; padding: 16px 18px; overflow-x: auto; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .amber { color: var(--accent); } .green { color: #4FB477; } .red { color: #E5484D; } .mute { color: var(--dim); }
+    table { border-collapse: collapse; width: 100%; }
+    td { padding: 8px 10px; border-top: 1px solid #2c2c3c; vertical-align: top; }
+    td:first-child { white-space: nowrap; font-weight: 600; }
+    a { color: var(--accent); }
+    .cta { text-align: center; margin-top: 28px; }
+    .cta a { display: inline-block; margin: 0 6px; padding: 10px 18px; border-radius: 999px; border: 1px solid var(--accent); text-decoration: none; }
+    .cta a.primary { background: var(--accent); color: var(--ink); font-weight: 700; }
+    footer { margin-top: 56px; color: var(--dim); font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.png" alt="">
+    <h1>cache-nudge</h1>
+    <p class="tag">A Claude Code plugin that nudges you once before an idle session's prompt cache goes cold, then lets you choose what to do about it.</p>
+    <p class="cta"><a class="primary" href="#install">Install</a><a href="https://github.com/pelayomendez/claude-cache-nudge">GitHub</a></p>
+  </header>
+
+  <h2>Why</h2>
+  <p>Claude Code caches the conversation for an hour. While it is warm, each message reads the conversation at about a tenth of the input price; once it expires, the next message writes the whole conversation back at about twice the input price. On a 150k-token conversation that first message back costs as much as about 300k input tokens. When you are about to step away from a large session, it is worth a decision.</p>
+
+  <h2>The band</h2>
+  <p>Above the prompt, on the right: the countdown and the conversation's size. Quiet while there is time, amber in the last ten minutes, red once cold.</p>
+<pre><span class="mute">cache 42m left · 120k</span> [more]
+<span class="amber">cache 8m left · 120k</span> [warm] [handoff] [more]
+<span class="red">cache cold · next message re-caches 120k</span></pre>
+
+  <h2>The panel</h2>
+  <p><code>[more]</code> or <code>/nudge</code> opens it: what the next message costs now and once cold, and the options for the time you will be away, with the cheapest marked.</p>
+<pre>Cache <span class="green">██████████████</span><span class="mute">░░░░░░</span> 42m left
+<span class="mute">opus-5-5 · 120k tokens</span>
+
+Away for 4h
+<span class="green">▸ Keep warm    4 pings   ~24k    $0.10  ◂ cheapest</span>
+  Compact now            ~85k    $0.34
+  Do nothing             ~234k   $0.94</pre>
+
+  <table>
+    <tr><td class="green">Keep warm</td><td>A tiny hidden request every 50 minutes for the hours you choose, so the cache never expires while you are away. It does not add to the conversation.</td></tr>
+    <tr><td>Then compact</td><td>If keep-warm runs out and you still have not typed, compact while the cache is warm, so coming back only costs the summary.</td></tr>
+    <tr><td>Ping once</td><td>One hidden request now: one more hour of cache.</td></tr>
+    <tr><td>Write handoff</td><td>Claude writes a handoff file while the cache is warm; <code>/clear</code> and start from it when you are back.</td></tr>
+    <tr><td>Compact now</td><td>Claude Code's own <code>/compact</code>, while summarising is cheapest.</td></tr>
+  </table>
+
+  <h2 id="install">Install</h2>
+<pre>/plugin marketplace add pelayomendez/claude-cache-nudge
+/plugin install cache-nudge@pelayomendez-cache-nudge</pre>
+  <p>Requires Claude Code 2.1.287 or newer. Nothing runs on its own except the one nudge: keep-warm requests start only when you choose them, on your own session and account. Details, settings and the cost model in the <a href="https://github.com/pelayomendez/claude-cache-nudge#readme">README</a>.</p>
+
+  <footer>MIT · by <a href="https://github.com/pelayomendez">Pelayo Méndez</a> · cost model adapted from <a href="https://github.com/danyuchn/claude-mods/tree/main/cache-panel">cache-panel</a></footer>
+</main>
+</body>
+</html>
