@@ -119,8 +119,17 @@ export function bandView(input: {
 }): BandView | undefined {
   const { now, lastRequestAt, ctx, minTokens, warmDeadline, isCompactAhead, isCompactAfter, columns } = input
   const size = tokensText(ctx)
-  const fit = (view: BandView): BandView =>
-    columns < 30 ? { ...view, text: view.text.split(' · ')[0] ?? view.text, buttons: [] } : columns < 56 ? { ...view, buttons: view.buttons.filter(one => one === 'more' || one === 'stop') } : view
+  // Fitted by what the terminal really draws: a button is `[ label ]` and a space before it. A row
+  // that overflows gets its buttons squeezed and cut, so drop buttons first, then shorten the text.
+  const width = (text: string, buttons: readonly BandButton[]) => text.length + buttons.reduce((sum, one) => sum + one.length + 5, 0)
+  const room = Math.max(0, columns - 2)
+  const fit = (view: BandView): BandView => {
+    if (width(view.text, view.buttons) <= room) return view
+    const essential = view.buttons.filter(one => one === 'more' || one === 'stop')
+    if (width(view.text, essential) <= room) return { ...view, buttons: essential }
+    if (view.text.length <= room) return { ...view, buttons: [] }
+    return { ...view, text: view.text.split(' · ')[0] ?? view.text, buttons: [] }
+  }
   if (warmDeadline !== undefined && now < warmDeadline) {
     const then = isCompactAfter ? ' · then compact' : ''
     return fit({ text: `warm ${minutesText(warmDeadline - now)} · ${size}${then}`, color: 'green', buttons: ['stop', 'more'] })

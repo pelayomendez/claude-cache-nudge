@@ -440,7 +440,9 @@ export const register: Register = on => {
     } as const
     const mine = (
       <Box key="cache-nudge" flexDirection="row" justifyContent="flex-end">
-        <Text color={view.color}>{view.text}</Text>
+        <Text color={view.color} wrap="truncate-end">
+          {view.text}
+        </Text>
         {view.buttons.map(name => (
           <Box key={name} flexDirection="row">
             <Text> </Text>
