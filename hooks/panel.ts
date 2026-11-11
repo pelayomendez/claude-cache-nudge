@@ -2,6 +2,7 @@
 
 import { apiRatios, fmtDur, fmtHours, fmtK, fmtUsd, ratiosFor, TTL_MS, toUsd } from './model.ts'
 import type { Basis, Pick, Plan, Price } from './model.ts'
+import type { ContextSplit } from './split.ts'
 
 export type Piece = { text: string; color?: string; bold?: boolean; dim?: boolean }
 export type Row = Piece[]
@@ -31,6 +32,8 @@ export type PanelInput = {
   isCompactAhead: boolean
   isSmall: boolean
   narrow: boolean
+  /** The fixed part and the conversation; absent when the breakdown has no Messages row. */
+  split?: ContextSplit
 }
 
 /**
@@ -38,7 +41,7 @@ export type PanelInput = {
  * once cold, then the options for the time away with the cheapest marked, and one line of advice.
  */
 export function panelRows(input: PanelInput): Row[] {
-  const { price, basis, ctx, leftMs, plan, isCompactAhead, isSmall, narrow } = input
+  const { price, basis, ctx, leftMs, plan, isCompactAhead, isSmall, narrow, split } = input
   const x = ratiosFor(basis, price)
   const api = apiRatios(price)
   const rows: Row[] = []
@@ -50,6 +53,12 @@ export function panelRows(input: PanelInput): Row[] {
     { text: status, bold: true, color: isCold ? 'red' : leftMs !== undefined && leftMs <= 10 * 60_000 ? 'yellow' : undefined },
   ])
   rows.push([{ text: `${price.id} · ${fmtK(ctx)} tokens${price.isGuess ? ' · price guessed' : ''}`, dim: true }])
+  if (split) {
+    // Narrow panes keep the two totals and drop the sub-part list.
+    const parts = narrow || split.parts.length === 0 ? '' : ` (${split.parts.map(part => `${part.label} ${fmtK(part.tokens)}`).join(' · ')})`
+    rows.push([{ text: `fixed ${fmtK(split.fixed)}${parts}`, dim: true }])
+    rows.push([{ text: `conversation ${fmtK(split.conversation)}`, dim: true }])
+  }
   rows.push([])
   const warmNext = ctx * x.r
   const coldNext = ctx * x.w

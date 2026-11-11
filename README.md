@@ -35,6 +35,8 @@ Red once cold (`cache cold · next message re-caches 120k`). While keep-warm run
 ```
 Cache ██████████████░░░░░░ 42m left
 opus-5-5 · 120k tokens
+fixed 38k (tools 14k · MCP 11k · skills 6k · memory 4k · system 3k)
+conversation 82k
 
 Next message now: ~6k $0.02 · once cold: ~240k $0.96
 
@@ -45,6 +47,8 @@ Away for 4h (change the hours below)
 
 Keep-warm stays cheaper than compacting for up to ~11.8h away.
 ```
+
+The two lines under the model split the context. **Fixed** is what every session carries before you type anything (system prompt, tools, MCP tools, skills, memory files, custom agents; the five largest are listed, largest first), so trimming MCP servers or skills saves in every new session. **Conversation** is what compacting or a handoff shrinks. The split is read from Claude Code's own estimates when the panel opens, with no extra model requests; on narrow panes the list in brackets is dropped, and without a breakdown the two lines are left out.
 
 Type how long you'll be away in the **Away (hours)** field under it (`1.5` or `1.5h`, up to 24) and the costs follow. Below a line, **What you can do** lists the actions, each with its key and a sentence on what it does:
 

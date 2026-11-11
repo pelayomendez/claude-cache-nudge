@@ -2,6 +2,10 @@
 
 Releases are tagged `cache-nudge--v<version>` (`claude plugin tag --push`).
 
+## 0.2.0
+
+- The panel (`/nudge`, `[more]`) splits the context into the fixed part every session carries (tools, MCP, skills, memory, system prompt) and the conversation. It is read from Claude Code's local estimates when the panel opens, so it makes no extra requests. The band is unchanged.
+
 ## 0.1.0
 
 First release.

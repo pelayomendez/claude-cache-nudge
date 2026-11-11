@@ -24,6 +24,8 @@ import {
 } from './model.ts'
 import { panelActions, panelRows } from './panel.ts'
 import type { ActionId } from './panel.ts'
+import { splitContext } from './split.ts'
+import type { ContextSplit } from './split.ts'
 import { HANDOFF_PROMPT, bandView, shouldCompactAtEnd, folderOf, herdrNotifyArgv, idleCompactionOn, isIdleCompactAhead, settingsFrom, shouldNudge } from './nudge.ts'
 import type { Settings } from './nudge.ts'
 
@@ -40,6 +42,7 @@ const nudgedFor = atom({ plugin: 'cache-nudge', key: 'nudgedFor' } as const, 0)
 const hoursText = atom({ plugin: 'cache-nudge', key: 'hoursText' } as const, '')
 const warm = atom({ plugin: 'cache-nudge', key: 'warm' } as const, null)
 const snap = atom({ plugin: 'cache-nudge', key: 'snap' } as const, EMPTY_SNAP)
+const split = atom({ plugin: 'cache-nudge', key: 'split' } as const, null)
 const note = atom({ plugin: 'cache-nudge', key: 'note' } as const, '')
 const compactAfter = atom({ plugin: 'cache-nudge', key: 'compactAfter' } as const, false)
 const lastTurnAt = atom({ plugin: 'cache-nudge', key: 'lastTurnAt' } as const, 0)
@@ -275,8 +278,24 @@ async function startWarm($: EngineInterface, hours: number): Promise<void> {
   await $.ui.close({ id: PANE })
 }
 
+/**
+ * The fixed/conversation split for the panel. Only when it opens: a `summary` breakdown estimates
+ * locally and sends no request, but it is still more work than the band's tick should repeat.
+ */
+async function refreshSplit($: EngineInterface): Promise<void> {
+  let next: ContextSplit | null = null
+  try {
+    const usage = await $.session.usage({ breakdown: 'summary' })
+    next = splitContext(usage.context.breakdown?.categories) ?? null
+  } catch {
+    // No breakdown: the panel hides the split.
+  }
+  await update($, split, () => next)
+}
+
 async function openPanel($: EngineInterface): Promise<void> {
   await refreshSnap($)
+  await refreshSplit($)
   await update($, nowAt, await $.clock.now().then(now => () => now))
   await update($, hoursText, () => '')
   await $.ui.open({ id: PANE, title: 'Cache', focus: true, closeOnEscape: true, rows: 20 })
@@ -511,6 +530,7 @@ export const register: Register = on => {
       isCompactAhead,
       isSmall: current.ctx < (settings.minTokens ?? thresholdTokens(price)),
       narrow,
+      split: (await read($, split)) ?? undefined,
     })
 
     return (
