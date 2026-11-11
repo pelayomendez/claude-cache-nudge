@@ -1,6 +1,6 @@
 {
   "name": "cache-nudge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "One nudge before an idle Claude Code session's prompt cache goes cold, then your choice: keep it warm, ping once, write a handoff, or compact, with cost estimates.",
   "author": {
     "name": "Pelayo Méndez",
