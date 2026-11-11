@@ -74,12 +74,12 @@ const panel = (narrow: boolean, withSplit: boolean) =>
   )
 
 test('the panel lists the fixed part with its sub-parts, then the conversation, under the model line', () => {
-  expect(panel(false, true)).toContain('opus-5-5 · 120k tokens\nfixed 38k (tools 14k · MCP 11k · skills 6k · memory 4k · system 3k)\nconversation 82k\n')
+  expect(panel(false, true)).toContain('opus-5-5 · 120k tokens\nfixed ~38k (tools 14k · MCP 11k · skills 6k · memory 4k · system 3k)\nconversation ~82k\n')
 })
 
 test('narrow: the sub-part list is dropped, the two totals stay', () => {
   const shown = panel(true, true)
-  expect(shown).toContain('opus-5-5 · 120k tokens\nfixed 38k\nconversation 82k\n')
+  expect(shown).toContain('opus-5-5 · 120k tokens\nfixed ~38k\nconversation ~82k\n')
   expect(shown).not.toContain('tools 14k')
 })
 

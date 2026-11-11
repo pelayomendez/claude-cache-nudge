@@ -12,7 +12,7 @@ export type Warm = {
 /** The context split for the panel; hooks/split.ts builds it. */
 export type ContextSplit = { fixed: number; conversation: number; parts: Array<{ label: string; tokens: number }> }
 
-export type Snap ={ ctx: number; model: string; hasLimits: boolean }
+export type Snap = { ctx: number; model: string; hasLimits: boolean }
 
 declare module 'claude-code' {
   interface PluginState {
