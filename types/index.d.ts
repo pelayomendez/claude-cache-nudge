@@ -9,6 +9,9 @@ export type Warm = {
   last: PingInfo | null
 }
 
+/** The context split for the panel; hooks/split.ts builds it. */
+export type ContextSplit = { fixed: number; conversation: number; parts: Array<{ label: string; tokens: number }> }
+
 export type Snap = { ctx: number; model: string; hasLimits: boolean }
 
 declare module 'claude-code' {
@@ -20,6 +23,8 @@ declare module 'claude-code' {
       hoursText: string
       warm: Warm | null
       snap: Snap
+      /** The panel's fixed/conversation split, fetched when it opens; null when there is no breakdown. */
+      split: ContextSplit | null
       note: string
       /** When keep-warm ends with you still away, compact while the cache is warm. Per session. */
       compactAfter: boolean
