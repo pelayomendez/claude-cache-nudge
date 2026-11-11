@@ -56,8 +56,8 @@ export function panelRows(input: PanelInput): Row[] {
   if (split) {
     // Narrow panes keep the two totals and drop the sub-part list.
     const parts = narrow || split.parts.length === 0 ? '' : ` (${split.parts.map(part => `${part.label} ${fmtK(part.tokens)}`).join(' · ')})`
-    rows.push([{ text: `fixed ${fmtK(split.fixed)}${parts}`, dim: true }])
-    rows.push([{ text: `conversation ${fmtK(split.conversation)}`, dim: true }])
+    rows.push([{ text: `fixed ~${fmtK(split.fixed)}${parts}`, dim: true }])
+    rows.push([{ text: `conversation ~${fmtK(split.conversation)}`, dim: true }])
   }
   rows.push([])
   const warmNext = ctx * x.r
